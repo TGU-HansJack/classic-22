@@ -56,6 +56,89 @@
   height: 1.05rem;
 }
 
+.classic22-live-socket-status {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  margin-left: 0.2rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  background: transparent;
+  color: var(--pico-muted-color);
+  font-size: 0.82rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.classic22-live-socket-wrap {
+  position: relative;
+}
+
+.classic22-live-socket-status:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 var(--pico-outline-width) var(--pico-primary-focus);
+}
+
+.classic22-live-socket-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.42);
+}
+
+.classic22-live-socket-status.is-connected .classic22-live-socket-dot {
+  background: #16a34a;
+  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.38);
+  animation: classic22-live-dot-pulse 1.6s ease-out infinite;
+}
+
+.classic22-live-socket-status.is-closed .classic22-live-socket-dot {
+  background: #ef4444;
+  box-shadow: none;
+  animation: none;
+}
+
+@keyframes classic22-live-dot-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 0.42rem rgba(22, 163, 74, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
+  }
+}
+
+.classic22-live-socket-tooltip {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.55rem);
+  width: min(24rem, 72vw);
+  max-width: 24rem;
+  padding: 0.72rem 0.8rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 0.55rem;
+  background: var(--pico-background-color);
+  color: var(--pico-color);
+  box-shadow: var(--pico-box-shadow);
+  text-align: left;
+  z-index: 10;
+}
+
+.classic22-live-socket-tooltip p {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.classic22-live-socket-tooltip p + p {
+  margin-top: 0.45rem;
+}
+
 @media (max-width: 768px) {
   .fmt table {
     display: block;
