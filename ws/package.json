@@ -1,0 +1,18 @@
+{
+  "name": "classic22-ws",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WebSocket server for classic-22 theme",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "pm2:start": "pm2 start ecosystem.config.cjs --env production",
+    "pm2:restart": "pm2 restart ecosystem.config.cjs --env production",
+    "pm2:stop": "pm2 stop ecosystem.config.cjs",
+    "pm2:delete": "pm2 delete ecosystem.config.cjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
