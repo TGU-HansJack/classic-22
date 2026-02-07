@@ -3,7 +3,7 @@
 const http = require('http');
 const { WebSocketServer } = require('ws');
 
-const host = process.env.WS_HOST || '127.0.0.1';
+const host = process.env.WS_HOST || '0.0.0.0';
 const port = Number(process.env.WS_PORT || 9527);
 
 const server = http.createServer((req, res) => {
@@ -51,6 +51,17 @@ function buildCounts() {
 
 function broadcastCounts() {
   const counts = buildCounts();
+  const mapData = {};
+
+  counts.forEach((count, path) => {
+    mapData[path] = Number(count || 0);
+  });
+
+  const mapPayload = JSON.stringify({
+    type: 'online_map',
+    data: mapData,
+    transport: 'websocket'
+  });
 
   wss.clients.forEach((client) => {
     if (client.readyState !== client.OPEN) return;
@@ -64,6 +75,7 @@ function broadcastCounts() {
       transport: 'websocket'
     });
 
+    safeSend(client, mapPayload);
     safeSend(client, payload);
   });
 }
@@ -71,6 +83,7 @@ function broadcastCounts() {
 wss.on('connection', (ws, req) => {
   ws.pagePath = normalizePath((req.url || '/').split('?')[0] || '/');
   ws.lastActiveAt = Date.now();
+  ws.isAlive = true;
 
   safeSend(
     ws,
@@ -104,6 +117,7 @@ wss.on('connection', (ws, req) => {
     }
 
     if (payload.type === 'ping') {
+      ws.isAlive = true;
       safeSend(
         ws,
         JSON.stringify({
@@ -119,11 +133,16 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('error', () => {});
+
+  ws.on('pong', () => {
+    ws.isAlive = true;
+    ws.lastActiveAt = Date.now();
+  });
 });
 
 server.on('upgrade', (req, socket, head) => {
   const pathname = normalizePath((req.url || '').split('?')[0] || '/');
-  if (pathname !== '/ws') {
+  if (pathname !== '/' && pathname !== '/ws' && pathname !== '/ws/') {
     socket.destroy();
     return;
   }
@@ -138,6 +157,19 @@ setInterval(() => {
   const now = Date.now();
   wss.clients.forEach((client) => {
     if (client.readyState !== client.OPEN) return;
+
+    if (client.isAlive === false) {
+      try {
+        client.terminate();
+      } catch (error) {}
+      return;
+    }
+
+    client.isAlive = false;
+    try {
+      client.ping();
+    } catch (error) {}
+
     if (now - Number(client.lastActiveAt || now) > idleTimeoutMs) {
       try {
         client.terminate();
@@ -149,4 +181,3 @@ setInterval(() => {
 server.listen(port, host, () => {
   console.log(`[classic22-ws] listening on ws://${host}:${port}/ws`);
 });
-

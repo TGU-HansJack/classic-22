@@ -22,11 +22,11 @@ if ($liveWsEndpoint === '') {
                     <span class="classic22-live-socket-dot" aria-hidden="true"></span>
                     <span data-live-socket-state-text>连接中</span>
                 </button>
-                <div class="classic22-live-socket-tooltip" data-live-socket-tooltip hidden role="dialog" aria-label="WebSocket 说明">
-                    <p>这是如何实现的？</p>
-                    <p>当你打开这个页面时，会自动建立 WebSocket 连接，当成功连接后服务器会推送当前浏览页面的人数。</p>
-                    <p>WebSocket 用于通知站点，站长在站点的实时活动，包括不限于文章的发布和更新。</p>
-                    <p>当前 Socket 状态：<span data-live-socket-tooltip-state>连接中</span></p>
+                <div class="classic22-live-socket-tooltip" data-live-socket-tooltip hidden role="dialog" aria-label="WebSocket 连接说明">
+                    <p class="classic22-live-socket-tip-title">实时在线说明</p>
+                    <p>页面打开后会自动建立 WebSocket 连接，并同步当前页面在线人数。</p>
+                    <p>用于展示站点实时活动（如文章发布、更新）。</p>
+                    <p>当前状态：<span class="classic22-live-socket-state" data-live-socket-tooltip-state>连接中</span></p>
                 </div>
             </li>
         </ul>

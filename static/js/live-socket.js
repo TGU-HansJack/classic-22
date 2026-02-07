@@ -186,6 +186,8 @@
     let ws = null;
     let reconnectTimer = null;
     let reconnectDelay = 1500;
+    let pingTimer = null;
+    let suppressReconnect = false;
 
     function clearReconnect() {
       if (!reconnectTimer) return;
@@ -194,11 +196,49 @@
     }
 
     function scheduleReconnect() {
+      if (suppressReconnect) return;
       clearReconnect();
       reconnectTimer = window.setTimeout(() => {
         connect();
       }, reconnectDelay);
       reconnectDelay = Math.min(12000, reconnectDelay + 1200);
+    }
+
+    function stopHeartbeat() {
+      if (!pingTimer) return;
+      window.clearInterval(pingTimer);
+      pingTimer = null;
+    }
+
+    function startHeartbeat() {
+      stopHeartbeat();
+
+      pingTimer = window.setInterval(() => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          return;
+        }
+
+        try {
+          ws.send(
+            JSON.stringify({
+              type: 'ping',
+              ts: Date.now()
+            })
+          );
+        } catch (e) {}
+      }, 30000);
+    }
+
+    function disconnectForPageLeave() {
+      suppressReconnect = true;
+      clearReconnect();
+      stopHeartbeat();
+
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        try {
+          ws.close(1000, 'page leave');
+        } catch (e) {}
+      }
     }
 
     function sendSubscribe() {
@@ -217,12 +257,29 @@
       const payload = readPayload(event && event.data);
       const updates = parseOnlineMessage(payload, currentPath);
       if (!updates) return;
+
+      const isFullMap = payload && payload.type === 'online_map';
+      const touchedPaths = new Set();
+
       Object.keys(updates).forEach((path) => {
         applyCount(path, updates[path]);
+        touchedPaths.add(normalizePath(path));
       });
+
+      if (isFullMap) {
+        cardMap.forEach((_nodes, path) => {
+          if (!touchedPaths.has(path)) {
+            applyCount(path, 0);
+          }
+        });
+      }
     }
 
     function connect() {
+      if (suppressReconnect) {
+        return;
+      }
+
       clearReconnect();
       setConnectionState('连接中', 'is-connecting');
 
@@ -236,19 +293,39 @@
       }
 
       ws.addEventListener('open', () => {
+        if (suppressReconnect) {
+          try {
+            ws.close(1000, 'page leave');
+          } catch (e) {}
+          return;
+        }
+
         reconnectDelay = 1500;
         setConnectionState('已连接', 'is-connected');
         sendSubscribe();
+        startHeartbeat();
       });
 
       ws.addEventListener('message', onMessage);
 
       ws.addEventListener('close', () => {
+        ws = null;
+        stopHeartbeat();
+
+        if (suppressReconnect) {
+          setConnectionState('已关闭', 'is-closed');
+          return;
+        }
+
         setConnectionState('已断开', 'is-closed');
         scheduleReconnect();
       });
 
       ws.addEventListener('error', () => {
+        if (suppressReconnect) {
+          return;
+        }
+
         setConnectionState('连接失败', 'is-closed');
       });
     }
@@ -257,11 +334,25 @@
     connect();
 
     window.addEventListener('beforeunload', () => {
-      clearReconnect();
-      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-        try {
-          ws.close(1000, 'page unload');
-        } catch (e) {}
+      disconnectForPageLeave();
+    });
+
+    window.addEventListener('pagehide', () => {
+      disconnectForPageLeave();
+    });
+
+    window.addEventListener('pageshow', (event) => {
+      if (!event.persisted) {
+        return;
+      }
+
+      if (!cfg.enabled) {
+        return;
+      }
+
+      suppressReconnect = false;
+      if (!ws || ws.readyState === WebSocket.CLOSED) {
+        connect();
       }
     });
   }

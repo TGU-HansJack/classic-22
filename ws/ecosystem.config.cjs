@@ -11,10 +11,9 @@ module.exports = {
       max_memory_restart: '256M',
       env: {
         NODE_ENV: 'production',
-        WS_HOST: '127.0.0.1',
+        WS_HOST: '0.0.0.0',
         WS_PORT: '9527'
       }
     }
   ]
 };
-

@@ -64,10 +64,10 @@
   margin-left: 0.2rem;
   border: 1px solid var(--pico-muted-border-color);
   border-radius: 999px;
-  padding: 0.2rem 0.55rem;
+  padding: 0.17rem 0.5rem;
   background: transparent;
   color: var(--pico-muted-color);
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   line-height: 1;
   cursor: pointer;
 }
@@ -95,10 +95,28 @@
   animation: classic22-live-dot-pulse 1.6s ease-out infinite;
 }
 
+.classic22-live-socket-status.is-connected {
+  color: #15803d;
+  border-color: rgba(22, 163, 74, 0.35);
+  background: rgba(22, 163, 74, 0.08);
+}
+
+.classic22-live-socket-status.is-connecting {
+  color: #b45309;
+  border-color: rgba(245, 158, 11, 0.38);
+  background: rgba(245, 158, 11, 0.08);
+}
+
 .classic22-live-socket-status.is-closed .classic22-live-socket-dot {
   background: #ef4444;
   box-shadow: none;
   animation: none;
+}
+
+.classic22-live-socket-status.is-closed {
+  color: #b91c1c;
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
 }
 
 @keyframes classic22-live-dot-pulse {
@@ -117,9 +135,11 @@
   position: absolute;
   right: 0;
   bottom: calc(100% + 0.55rem);
-  width: min(24rem, 72vw);
-  max-width: 24rem;
-  padding: 0.72rem 0.8rem;
+  width: min(19.5rem, 82vw);
+  max-width: calc(100vw - 1.5rem);
+  max-height: min(55vh, 18rem);
+  overflow: auto;
+  padding: 0.58rem 0.68rem;
   border: 1px solid var(--pico-muted-border-color);
   border-radius: 0.55rem;
   background: var(--pico-background-color);
@@ -131,12 +151,42 @@
 
 .classic22-live-socket-tooltip p {
   margin: 0;
-  font-size: 0.82rem;
-  line-height: 1.55;
+  font-size: 0.76rem;
+  line-height: 1.45;
 }
 
 .classic22-live-socket-tooltip p + p {
-  margin-top: 0.45rem;
+  margin-top: 0.35rem;
+}
+
+.classic22-live-socket-tip-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.classic22-live-socket-state {
+  font-weight: 600;
+  color: inherit;
+}
+
+.classic22-live-socket-status.is-connected ~ .classic22-live-socket-tooltip .classic22-live-socket-state {
+  color: #16a34a;
+}
+
+.classic22-live-socket-status.is-connecting ~ .classic22-live-socket-tooltip .classic22-live-socket-state {
+  color: #f59e0b;
+}
+
+.classic22-live-socket-status.is-closed ~ .classic22-live-socket-tooltip .classic22-live-socket-state {
+  color: #ef4444;
+}
+
+@media (max-width: 600px) {
+  .classic22-live-socket-tooltip {
+    right: -0.25rem;
+    width: min(16.5rem, 90vw);
+    max-height: 52vh;
+  }
 }
 
 @media (max-width: 768px) {
