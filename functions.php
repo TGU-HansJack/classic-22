@@ -168,16 +168,16 @@ function themeConfig($form)
         items.forEach(function (item, index) {
           var tr = el('tr');
 
-          // 鏍囪瘑/Emoji
+          // 标识/Emoji
           var markTd = el('td');
           var markWrap = el('div', { class: 'classic22-anno-mark' });
 
           var typeSelect = el('select');
           [
-            { value: 'notice', label: '閫氱煡' },
-            { value: 'info', label: '淇℃伅' },
-            { value: 'warning', label: '璀﹀憡' },
-            { value: 'activity', label: '娲诲姩' }
+            { value: 'notice', label: '通知' },
+            { value: 'info', label: '信息' },
+            { value: 'warning', label: '警告' },
+            { value: 'activity', label: '活动' }
           ].forEach(function (opt) {
             var option = el('option', { value: opt.value, text: opt.label });
             if (item.type === opt.value) option.selected = true;
