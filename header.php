@@ -1,4 +1,13 @@
 <?php if (!defined('__TYPECHO_ROOT_DIR__')) exit; ?>
+<?php
+$classic22LinuxDoFlashError = '';
+if (function_exists('classic22LinuxDoHandleRequest')) {
+    classic22LinuxDoHandleRequest($this);
+}
+if (function_exists('classic22LinuxDoConsumeError')) {
+    $classic22LinuxDoFlashError = classic22LinuxDoConsumeError();
+}
+?>
 <!DOCTYPE html>
 <html lang="zh-Hans"<?php if ($this->options->colorSchema): ?> data-theme="<?php $this->options->colorSchema(); ?>"<?php endif; ?>>
 <head>
@@ -23,6 +32,23 @@ if ($this->is('index') && $this->getCurrentPage() === 1) {
     $homeAnnouncements = classic22ParseHomeAnnouncements($this->options->homeAnnouncements ?? null);
 }
 ?>
+
+<?php if ($classic22LinuxDoFlashError !== ''): ?>
+    <style>
+        .classic22-linuxdo-banner {
+            margin: .75rem auto 0;
+            padding: .65rem .8rem;
+            border: 1px solid var(--pico-muted-border-color, #d6d9e0);
+            border-radius: var(--pico-border-radius, .5rem);
+            background: var(--pico-card-background-color, rgba(0, 0, 0, .03));
+            color: var(--pico-muted-color, #666);
+            font-size: .95em;
+        }
+    </style>
+    <div class="classic22-linuxdo-banner container-fluid" role="alert">
+        <?php echo htmlspecialchars($classic22LinuxDoFlashError, ENT_QUOTES, $this->options->charset); ?>
+    </div>
+<?php endif; ?>
 
 <header class="site-navbar container-fluid">
     <nav>

@@ -1,17 +1,17 @@
-﻿<?php
+<?php
 if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 
 function themeConfig($form)
 {
     $logoUrl = new \Typecho\Widget\Helper\Form\Element\Text(
         'logoUrl',
-        null,
+
         null,
         _t('网站 Logo'),
-        _t('在这里填写图片 URL，网站将显示 Logo')
+        _t('可填写绝对 URL 或站内相对路径，留空则显示站点标题')
     );
 
-    $form->addInput($logoUrl->addRule('url', _t('请填写正确的 URL 地址')));
+    $form->addInput($logoUrl);
 
     $colorSchema = new \Typecho\Widget\Helper\Form\Element\Select(
         'colorSchema',
@@ -168,16 +168,16 @@ function themeConfig($form)
         items.forEach(function (item, index) {
           var tr = el('tr');
 
-          // 标识/Emoji
+          // 鏍囪瘑/Emoji
           var markTd = el('td');
           var markWrap = el('div', { class: 'classic22-anno-mark' });
 
           var typeSelect = el('select');
           [
-            { value: 'notice', label: '通知' },
-            { value: 'info', label: '信息' },
-            { value: 'warning', label: '警告' },
-            { value: 'activity', label: '活动' }
+            { value: 'notice', label: '閫氱煡' },
+            { value: 'info', label: '淇℃伅' },
+            { value: 'warning', label: '璀﹀憡' },
+            { value: 'activity', label: '娲诲姩' }
           ].forEach(function (opt) {
             var option = el('option', { value: opt.value, text: opt.label });
             if (item.type === opt.value) option.selected = true;
@@ -188,7 +188,7 @@ function themeConfig($form)
             sync();
           });
 
-          var emojiInput = el('input', { type: 'text', placeholder: '📢', value: item.emoji || '' });
+          var emojiInput = el('input', { type: 'text', placeholder: '📝', value: item.emoji || '' });
           emojiInput.addEventListener('input', function () {
             items[index].emoji = safeString(emojiInput.value).trim();
             sync();
@@ -265,9 +265,939 @@ HTML;
     $homeAnnouncements->setInputsAttribute('style', 'display:none');
     $form->addInput($homeAnnouncements);
 
-    // Authorization-related theme settings removed.
+    $linuxDoClientId = new \Typecho\Widget\Helper\Form\Element\Text(
+        'linuxDoClientId',
+        null,
+        (string) (classic22LinuxDoFallbackConfig()['linuxDoClientId'] ?? ''),
+        _t('Linux Do Client ID'),
+        _t('在 Connect.Linux.Do 申请应用后获得。')
+    );
+    $form->addInput($linuxDoClientId);
+
+    $linuxDoClientSecret = new \Typecho\Widget\Helper\Form\Element\Password(
+        'linuxDoClientSecret',
+        null,
+        (string) (classic22LinuxDoFallbackConfig()['linuxDoClientSecret'] ?? ''),
+        _t('Linux Do Client Secret'),
+        _t('仅服务端使用。回调地址请填写：站点首页 + ?ldo_action=callback，例如 https://example.com/?ldo_action=callback')
+    );
+    $form->addInput($linuxDoClientSecret);
+
+
     return;
 
+}
+
+function classic22LinuxDoThemeName(): string
+{
+    return basename(__DIR__);
+}
+
+function classic22LinuxDoThemeOptionName(): string
+{
+    return 'theme:' . classic22LinuxDoThemeName();
+}
+
+function classic22LinuxDoFallbackOptionName(): string
+{
+    return 'classic22_linuxdo_config';
+}
+
+function classic22LinuxDoDb()
+{
+    try {
+        if (class_exists('\\Typecho\\Db')) {
+            return \Typecho\Db::get();
+        }
+
+        if (class_exists('Typecho_Db')) {
+            return \Typecho_Db::get();
+        }
+    } catch (\Throwable $exception) {
+        return null;
+    }
+
+    return null;
+}
+
+function classic22LinuxDoLoadOptionJson(string $name): array
+{
+    $db = classic22LinuxDoDb();
+    if (!is_object($db) || $name === '') {
+        return [];
+    }
+
+    try {
+        $row = $db->fetchRow(
+            $db->select('value')
+                ->from('table.options')
+                ->where('name = ? AND user = ?', $name, 0)
+                ->limit(1)
+        );
+    } catch (\Throwable $exception) {
+        return [];
+    }
+
+    $raw = '';
+    if (is_array($row)) {
+        $raw = (string) ($row['value'] ?? '');
+    } elseif (is_object($row)) {
+        $raw = (string) ($row->value ?? '');
+    }
+
+    if ($raw === '') {
+        return [];
+    }
+
+    $decoded = json_decode($raw, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function classic22LinuxDoSaveOptionJson(string $name, array $payload): void
+{
+    $db = classic22LinuxDoDb();
+    if (!is_object($db) || $name === '') {
+        return;
+    }
+
+    $value = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($value)) {
+        return;
+    }
+
+    try {
+        $exists = $db->fetchObject(
+            $db->select('name')
+                ->from('table.options')
+                ->where('name = ? AND user = ?', $name, 0)
+                ->limit(1)
+        );
+
+        if (is_object($exists)) {
+            $db->query(
+                $db->update('table.options')
+                    ->rows(['value' => $value])
+                    ->where('name = ? AND user = ?', $name, 0)
+            );
+            return;
+        }
+
+        $db->query(
+            $db->insert('table.options')
+                ->rows([
+                    'name' => $name,
+                    'value' => $value,
+                    'user' => 0,
+                ])
+        );
+    } catch (\Throwable $exception) {
+    }
+}
+
+function classic22LinuxDoFallbackConfig(bool $refresh = false): array
+{
+    static $cache = null;
+
+    if ($refresh || !is_array($cache)) {
+        $cache = classic22LinuxDoLoadOptionJson(classic22LinuxDoFallbackOptionName());
+    }
+
+    return $cache;
+}
+
+function classic22LinuxDoThemeConfig(bool $refresh = false): array
+{
+    static $cache = null;
+
+    if ($refresh || !is_array($cache)) {
+        $cache = classic22LinuxDoLoadOptionJson(classic22LinuxDoThemeOptionName());
+    }
+
+    return $cache;
+}
+
+function classic22LinuxDoSaveFallbackConfig(array $config): void
+{
+    classic22LinuxDoSaveOptionJson(classic22LinuxDoFallbackOptionName(), $config);
+    classic22LinuxDoFallbackConfig(true);
+}
+
+function classic22LinuxDoExtractSettingsFromRequest(): array
+{
+    $keys = ['linuxDoClientId', 'linuxDoClientSecret'];
+    $extracted = [];
+
+    foreach ($keys as $key) {
+        if (isset($_POST[$key])) {
+            $extracted[$key] = trim((string) $_POST[$key]);
+        }
+    }
+
+    $rawBody = '';
+    try {
+        $rawBody = (string) file_get_contents('php://input');
+    } catch (\Throwable $exception) {
+        $rawBody = '';
+    }
+
+    if ($rawBody === '') {
+        return $extracted;
+    }
+
+    $decodedBody = json_decode($rawBody, true);
+    if (!is_array($decodedBody)) {
+        return $extracted;
+    }
+
+    $values = [];
+    if (isset($decodedBody['values']) && is_array($decodedBody['values'])) {
+        $values = $decodedBody['values'];
+    }
+
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $decodedBody)) {
+            $extracted[$key] = trim((string) $decodedBody[$key]);
+        }
+
+        if (array_key_exists($key, $values)) {
+            $extracted[$key] = trim((string) $values[$key]);
+        }
+    }
+
+    return $extracted;
+}
+
+function themeConfigHandle(array $settings, bool $isInit)
+{
+    $requestSettings = classic22LinuxDoExtractSettingsFromRequest();
+    $existingThemeSettings = classic22LinuxDoThemeConfig();
+    $mergedSettings = array_merge($existingThemeSettings, $settings, $requestSettings);
+    classic22LinuxDoSaveOptionJson(classic22LinuxDoThemeOptionName(), $mergedSettings);
+    classic22LinuxDoThemeConfig(true);
+
+    $fallbackConfig = classic22LinuxDoFallbackConfig();
+    $linuxDoKeys = ['linuxDoClientId', 'linuxDoClientSecret'];
+
+    foreach ($linuxDoKeys as $linuxDoKey) {
+        if (!array_key_exists($linuxDoKey, $mergedSettings)) {
+            continue;
+        }
+
+        $newValue = trim((string) $mergedSettings[$linuxDoKey]);
+
+        if (
+            $linuxDoKey === 'linuxDoClientSecret'
+            && $newValue === ''
+            && isset($fallbackConfig[$linuxDoKey])
+            && trim((string) $fallbackConfig[$linuxDoKey]) !== ''
+        ) {
+            continue;
+        }
+
+        $fallbackConfig[$linuxDoKey] = $newValue;
+    }
+
+    classic22LinuxDoSaveFallbackConfig($fallbackConfig);
+}
+
+function classic22LinuxDoGetOption($options, string $key, string $default = ''): string
+{
+    if (!is_object($options)) {
+        $fallback = classic22LinuxDoFallbackConfig();
+        if (isset($fallback[$key]) && !is_array($fallback[$key]) && !is_object($fallback[$key])) {
+            $value = trim((string) $fallback[$key]);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return $default;
+    }
+
+    $value = null;
+
+    try {
+        $value = $options->{$key};
+    } catch (\Throwable $exception) {
+    }
+
+    if ($value !== null && !is_array($value) && !is_object($value)) {
+        $normalized = trim((string) $value);
+        if ($normalized !== '') {
+            return $normalized;
+        }
+    }
+
+    $themeConfig = classic22LinuxDoThemeConfig();
+    if (isset($themeConfig[$key]) && !is_array($themeConfig[$key]) && !is_object($themeConfig[$key])) {
+        $normalized = trim((string) $themeConfig[$key]);
+        if ($normalized !== '') {
+            return $normalized;
+        }
+    }
+
+    $fallback = classic22LinuxDoFallbackConfig();
+    if (isset($fallback[$key]) && !is_array($fallback[$key]) && !is_object($fallback[$key])) {
+        $normalized = trim((string) $fallback[$key]);
+        if ($normalized !== '') {
+            return $normalized;
+        }
+    }
+
+    return $default;
+}
+
+function classic22LinuxDoDetectBaseUrlFromServer(): string
+{
+    $host = trim((string) ($_SERVER['HTTP_HOST'] ?? ''));
+    if ($host === '') {
+        return '/';
+    }
+
+    $forwardedProto = strtolower(trim((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')));
+    $httpsEnabled = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
+        || (string) ($_SERVER['SERVER_PORT'] ?? '') === '443'
+        || $forwardedProto === 'https';
+
+    $scheme = $httpsEnabled ? 'https' : 'http';
+    $scriptName = (string) ($_SERVER['SCRIPT_NAME'] ?? '/');
+    $basePath = str_replace('\\', '/', dirname($scriptName));
+    if ($basePath === '.' || $basePath === '/') {
+        $basePath = '';
+    }
+
+    return $scheme . '://' . $host . $basePath . '/';
+}
+
+function classic22LinuxDoSiteBaseUrl($options): string
+{
+    $siteUrl = classic22LinuxDoGetOption($options, 'siteUrl', '/');
+    if ($siteUrl === '' || $siteUrl === '/') {
+        return classic22LinuxDoDetectBaseUrlFromServer();
+    }
+
+    if (!preg_match('/^https?:\/\//i', $siteUrl)) {
+        return classic22LinuxDoDetectBaseUrlFromServer();
+    }
+
+    return rtrim($siteUrl, '/') . '/';
+}
+
+function classic22LinuxDoCallbackUrl($options): string
+{
+    return classic22LinuxDoSiteBaseUrl($options) . '?ldo_action=callback';
+}
+
+function classic22LinuxDoNormalizeReturnTo(string $returnTo, $options): string
+{
+    $fallback = classic22LinuxDoSiteBaseUrl($options);
+    $returnTo = trim($returnTo);
+
+    if ($returnTo === '' || strpos($returnTo, '//') === 0) {
+        return $fallback;
+    }
+
+    $siteParts = parse_url($fallback);
+    $returnParts = parse_url($returnTo);
+
+    if (is_array($returnParts) && isset($returnParts['scheme'])) {
+        $siteScheme = strtolower((string) ($siteParts['scheme'] ?? ''));
+        $siteHost = strtolower((string) ($siteParts['host'] ?? ''));
+        $sitePort = (int) ($siteParts['port'] ?? 0);
+
+        $returnScheme = strtolower((string) ($returnParts['scheme'] ?? ''));
+        $returnHost = strtolower((string) ($returnParts['host'] ?? ''));
+        $returnPort = (int) ($returnParts['port'] ?? 0);
+
+        if ($siteScheme !== $returnScheme || $siteHost !== $returnHost) {
+            return $fallback;
+        }
+
+        if ($sitePort > 0 && $returnPort > 0 && $sitePort !== $returnPort) {
+            return $fallback;
+        }
+
+        return $returnTo;
+    }
+
+    if (strpos($returnTo, '?') === 0) {
+        return $fallback . ltrim($returnTo, '?');
+    }
+
+    if (strpos($returnTo, '/') === 0) {
+        return rtrim($fallback, '/') . $returnTo;
+    }
+
+    return rtrim($fallback, '/') . '/' . ltrim($returnTo, '/');
+}
+
+function classic22LinuxDoBuildActionUrl($options, string $action, string $returnTo = ''): string
+{
+    $params = ['ldo_action' => $action];
+
+    if ($returnTo !== '') {
+        $params['return_to'] = classic22LinuxDoNormalizeReturnTo($returnTo, $options);
+    }
+
+    return classic22LinuxDoSiteBaseUrl($options) . '?' . http_build_query($params);
+}
+
+function classic22LinuxDoIsConfigured($options): bool
+{
+    return classic22LinuxDoGetOption($options, 'linuxDoClientId') !== '';
+}
+
+function classic22LinuxDoHasClientSecret($options): bool
+{
+    return classic22LinuxDoGetOption($options, 'linuxDoClientSecret') !== '';
+}
+
+function classic22LinuxDoCookieGet(string $key, string $default = ''): string
+{
+    if (class_exists('\\Typecho\\Cookie')) {
+        $value = \Typecho\Cookie::get($key, $default);
+        return is_string($value) ? $value : $default;
+    }
+
+    return $default;
+}
+
+function classic22LinuxDoCookieSet(string $key, string $value, int $expire = 0): void
+{
+    if (class_exists('\\Typecho\\Cookie')) {
+        \Typecho\Cookie::set($key, $value, $expire);
+    }
+}
+
+function classic22LinuxDoCookieDelete(string $key): void
+{
+    if (class_exists('\\Typecho\\Cookie')) {
+        \Typecho\Cookie::delete($key);
+    }
+}
+
+function classic22LinuxDoRedirect($archive, string $location, bool $permanent = false): void
+{
+    $location = \Typecho\Common::safeUrl($location);
+
+    if (!headers_sent()) {
+        header('Location: ' . $location, true, $permanent ? 301 : 302);
+        exit;
+    }
+
+    $escaped = htmlspecialchars($location, ENT_QUOTES, 'UTF-8');
+    echo '<!doctype html><html><head><meta charset="utf-8">',
+        '<meta http-equiv="refresh" content="0;url=',
+        $escaped,
+        '">',
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
+        '<title>Redirecting...</title></head><body>',
+        '<p><a href="',
+        $escaped,
+        '">继续跳转</a></p>',
+        '</body></html>';
+    exit;
+}
+
+function classic22LinuxDoBase64UrlEncode(string $data): string
+{
+    return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+}
+
+function classic22LinuxDoBase64UrlDecode(string $data): string
+{
+    $data = strtr($data, '-_', '+/');
+    $pad = strlen($data) % 4;
+    if ($pad !== 0) {
+        $data .= str_repeat('=', 4 - $pad);
+    }
+
+    $decoded = base64_decode($data, true);
+    return $decoded === false ? '' : $decoded;
+}
+
+function classic22LinuxDoSigningKey($options): string
+{
+    $secret = classic22LinuxDoGetOption($options, 'secret');
+    if ($secret === '') {
+        $secret = classic22LinuxDoSiteBaseUrl($options);
+    }
+
+    return 'classic22-linuxdo|' . $secret;
+}
+
+function classic22LinuxDoMakeSignedPayload(array $data, $options): string
+{
+    $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $payload = classic22LinuxDoBase64UrlEncode($json === false ? '{}' : $json);
+    $sig = hash_hmac('sha256', $payload, classic22LinuxDoSigningKey($options));
+    return $payload . '.' . $sig;
+}
+
+function classic22LinuxDoParseSignedPayload(string $value, $options): ?array
+{
+    $value = trim($value);
+    if ($value === '' || strpos($value, '.') === false) {
+        return null;
+    }
+
+    [$payload, $sig] = explode('.', $value, 2);
+    if ($payload === '' || $sig === '') {
+        return null;
+    }
+
+    $expected = hash_hmac('sha256', $payload, classic22LinuxDoSigningKey($options));
+    if (!hash_equals($expected, $sig)) {
+        return null;
+    }
+
+    $json = classic22LinuxDoBase64UrlDecode($payload);
+    if ($json === '') {
+        return null;
+    }
+
+    $data = json_decode($json, true);
+    return is_array($data) ? $data : null;
+}
+
+function classic22LinuxDoMakeStateToken(string $returnTo, $options): string
+{
+    $returnTo = classic22LinuxDoNormalizeReturnTo($returnTo, $options);
+    return classic22LinuxDoMakeSignedPayload([
+        't' => time(),
+        'r' => $returnTo,
+        'n' => classic22LinuxDoGenerateState(),
+    ], $options);
+}
+
+function classic22LinuxDoParseStateToken(string $state, $options): ?string
+{
+    $data = classic22LinuxDoParseSignedPayload($state, $options);
+    if (!is_array($data)) {
+        return null;
+    }
+
+    $issuedAt = (int) ($data['t'] ?? 0);
+    $returnTo = (string) ($data['r'] ?? '');
+    if ($issuedAt <= 0 || $returnTo === '') {
+        return null;
+    }
+
+    $now = time();
+    if ($issuedAt > $now + 300 || $issuedAt < $now - 3600) {
+        return null;
+    }
+
+    return classic22LinuxDoNormalizeReturnTo($returnTo, $options);
+}
+
+function classic22LinuxDoPersistUser(array $identity, $options): void
+{
+    classic22LinuxDoEnsureSession();
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION['classic22_linuxdo_user'] = $identity;
+    }
+
+    $cookieValue = classic22LinuxDoMakeSignedPayload([
+        't' => time(),
+        'u' => [
+            'id' => (string) ($identity['id'] ?? ''),
+            'username' => (string) ($identity['username'] ?? ''),
+            'name' => (string) ($identity['name'] ?? ''),
+            'author' => (string) ($identity['author'] ?? ''),
+            'mail' => (string) ($identity['mail'] ?? ''),
+            'url' => (string) ($identity['url'] ?? ''),
+        ],
+    ], $options);
+
+    classic22LinuxDoCookieSet('__classic22_linuxdo_user', $cookieValue, 14 * 24 * 3600);
+}
+
+function classic22LinuxDoReadUserFromCookie($options): ?array
+{
+    $raw = classic22LinuxDoCookieGet('__classic22_linuxdo_user', '');
+    if ($raw === '') {
+        return null;
+    }
+
+    $data = classic22LinuxDoParseSignedPayload($raw, $options);
+    if (!is_array($data) || empty($data['u']) || !is_array($data['u'])) {
+        return null;
+    }
+
+    $issuedAt = (int) ($data['t'] ?? 0);
+    if ($issuedAt > 0 && $issuedAt < time() - 30 * 24 * 3600) {
+        return null;
+    }
+
+    $user = $data['u'];
+    $author = trim((string) ($user['author'] ?? ''));
+    $mail = trim((string) ($user['mail'] ?? ''));
+    if ($author === '' || $mail === '') {
+        return null;
+    }
+
+    return [
+        'id' => (string) ($user['id'] ?? ''),
+        'username' => (string) ($user['username'] ?? ''),
+        'name' => (string) ($user['name'] ?? ''),
+        'author' => $author,
+        'mail' => $mail,
+        'url' => (string) ($user['url'] ?? ''),
+        'login_at' => $issuedAt > 0 ? $issuedAt : time(),
+    ];
+}
+
+function classic22LinuxDoEnsureSession(): void
+{
+    if (PHP_SAPI === 'cli') {
+        return;
+    }
+
+    if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
+        session_start();
+    }
+}
+
+function classic22LinuxDoSetError(string $message): void
+{
+    classic22LinuxDoEnsureSession();
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION['classic22_linuxdo_error'] = $message;
+        return;
+    }
+
+    classic22LinuxDoCookieSet('__classic22_linuxdo_error', classic22LinuxDoBase64UrlEncode($message), 300);
+}
+
+function classic22LinuxDoConsumeError(): string
+{
+    classic22LinuxDoEnsureSession();
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $message = (string) ($_SESSION['classic22_linuxdo_error'] ?? '');
+        unset($_SESSION['classic22_linuxdo_error']);
+
+        if ($message !== '') {
+            return $message;
+        }
+    }
+
+    $raw = classic22LinuxDoCookieGet('__classic22_linuxdo_error', '');
+    if ($raw === '') {
+        return '';
+    }
+
+    classic22LinuxDoCookieDelete('__classic22_linuxdo_error');
+    return classic22LinuxDoBase64UrlDecode($raw);
+}
+
+function classic22LinuxDoCurrentUser($options = null): ?array
+{
+    classic22LinuxDoEnsureSession();
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $user = $_SESSION['classic22_linuxdo_user'] ?? null;
+        if (is_array($user) && !empty($user['author']) && !empty($user['mail'])) {
+            return $user;
+        }
+    }
+
+    if ($options === null) {
+        return null;
+    }
+
+    return classic22LinuxDoReadUserFromCookie($options);
+}
+
+function classic22LinuxDoClearSession(): void
+{
+    classic22LinuxDoEnsureSession();
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        unset(
+            $_SESSION['classic22_linuxdo_user'],
+            $_SESSION['classic22_linuxdo_state'],
+            $_SESSION['classic22_linuxdo_return_to'],
+            $_SESSION['classic22_linuxdo_error']
+        );
+    }
+
+    classic22LinuxDoCookieDelete('__classic22_linuxdo_user');
+    classic22LinuxDoCookieDelete('__classic22_linuxdo_error');
+}
+
+function classic22LinuxDoGenerateState(): string
+{
+    if (function_exists('random_bytes')) {
+        try {
+            return bin2hex(random_bytes(16));
+        } catch (\Throwable $exception) {
+        }
+    }
+
+    return md5(uniqid((string) mt_rand(), true));
+}
+
+function classic22LinuxDoHttpRequest(string $url, string $method = 'GET', string $body = '', array $headers = []): array
+{
+    if (!function_exists('curl_init')) {
+        return [
+            'ok' => false,
+            'status' => 0,
+            'body' => '',
+            'error' => '服务器未启用 cURL 扩展',
+        ];
+    }
+
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+
+    if (!empty($headers)) {
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    }
+
+    if (strtoupper($method) === 'POST') {
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+    }
+
+    $responseBody = curl_exec($ch);
+    $error = curl_error($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+
+    if ($responseBody === false) {
+        return [
+            'ok' => false,
+            'status' => $status,
+            'body' => '',
+            'error' => $error !== '' ? $error : '请求失败',
+        ];
+    }
+
+    return [
+        'ok' => $status >= 200 && $status < 300,
+        'status' => $status,
+        'body' => (string) $responseBody,
+        'error' => $error,
+    ];
+}
+
+function classic22LinuxDoExchangeCodeForToken(string $code, $options): array
+{
+    if (!classic22LinuxDoHasClientSecret($options)) {
+        return ['ok' => false, 'message' => '请先在主题设置中填写 Linux Do Client Secret。'];
+    }
+
+    $payload = http_build_query([
+        'client_id' => classic22LinuxDoGetOption($options, 'linuxDoClientId'),
+        'client_secret' => classic22LinuxDoGetOption($options, 'linuxDoClientSecret'),
+        'code' => $code,
+        'redirect_uri' => classic22LinuxDoCallbackUrl($options),
+        'grant_type' => 'authorization_code',
+    ]);
+
+    $response = classic22LinuxDoHttpRequest(
+        'https://connect.linux.do/oauth2/token',
+        'POST',
+        $payload,
+        [
+            'Content-Type: application/x-www-form-urlencoded',
+            'Accept: application/json',
+        ]
+    );
+
+    $message = '获取访问令牌失败';
+    if (!$response['ok']) {
+        $data = json_decode((string) $response['body'], true);
+        if (is_array($data) && !empty($data['error_description'])) {
+            $message = $message . '：' . (string) $data['error_description'];
+        } elseif (!empty($response['error'])) {
+            $message = $message . '：' . (string) $response['error'];
+        }
+
+        return ['ok' => false, 'message' => $message];
+    }
+
+    $data = json_decode((string) $response['body'], true);
+    if (!is_array($data) || empty($data['access_token'])) {
+        return ['ok' => false, 'message' => $message];
+    }
+
+    return ['ok' => true, 'access_token' => (string) $data['access_token']];
+}
+
+function classic22LinuxDoFetchUserInfo(string $accessToken): array
+{
+    $response = classic22LinuxDoHttpRequest(
+        'https://connect.linux.do/api/user',
+        'GET',
+        '',
+        [
+            'Authorization: Bearer ' . $accessToken,
+            'Accept: application/json',
+        ]
+    );
+
+    if (!$response['ok']) {
+        return ['ok' => false, 'message' => '获取用户信息失败'];
+    }
+
+    $data = json_decode((string) $response['body'], true);
+    if (!is_array($data)) {
+        return ['ok' => false, 'message' => '用户信息格式无效'];
+    }
+
+    return ['ok' => true, 'data' => $data];
+}
+
+function classic22LinuxDoMapIdentity(array $userData): ?array
+{
+    $payload = isset($userData['user']) && is_array($userData['user']) ? $userData['user'] : $userData;
+
+    $id = trim((string) ($payload['id'] ?? ''));
+    $username = trim((string) ($payload['username'] ?? ''));
+    $name = trim((string) ($payload['name'] ?? ''));
+
+    if ($id === '' && $username === '') {
+        return null;
+    }
+
+    $author = $name !== '' ? $name : $username;
+    if ($author === '') {
+        $author = 'Linux Do 用户';
+    }
+
+    $mailSeed = strtolower((string) ($id !== '' ? $id : $username));
+    $mailSeed = preg_replace('/[^a-z0-9_\.-]+/i', '.', $mailSeed ?? '');
+    $mailSeed = trim((string) $mailSeed, '.');
+    if ($mailSeed === '') {
+        $mailSeed = substr(md5($author), 0, 12);
+    }
+
+    $profileUrl = 'https://linux.do';
+    if ($username !== '') {
+        $profileUrl = 'https://linux.do/u/' . rawurlencode($username);
+    }
+
+    return [
+        'id' => $id,
+        'username' => $username,
+        'name' => $name,
+        'author' => $author,
+        'mail' => $mailSeed . '@linux.do',
+        'url' => $profileUrl,
+        'avatar_template' => (string) ($payload['avatar_template'] ?? ''),
+        'login_at' => time(),
+    ];
+}
+
+function classic22LinuxDoHandleLogin($archive): void
+{
+    $options = $archive->options;
+    $returnTo = classic22LinuxDoNormalizeReturnTo((string) $archive->request->get('return_to'), $options);
+    $state = classic22LinuxDoMakeStateToken($returnTo, $options);
+
+    $authorizeUrl = 'https://connect.linux.do/oauth2/authorize?' . http_build_query([
+        'client_id' => classic22LinuxDoGetOption($options, 'linuxDoClientId'),
+        'redirect_uri' => classic22LinuxDoCallbackUrl($options),
+        'response_type' => 'code',
+        'scope' => 'user',
+        'state' => $state,
+    ]);
+
+    classic22LinuxDoRedirect($archive, $authorizeUrl);
+}
+
+function classic22LinuxDoHandleCallback($archive): void
+{
+    $options = $archive->options;
+    $fallback = classic22LinuxDoSiteBaseUrl($options);
+    $state = trim((string) $archive->request->get('state'));
+    $returnToFromState = $state !== '' ? classic22LinuxDoParseStateToken($state, $options) : null;
+    $redirectTo = $returnToFromState ?: $fallback;
+
+    $oauthError = trim((string) $archive->request->get('error'));
+    if ($oauthError !== '') {
+        classic22LinuxDoSetError('Linux Do 授权失败：' . $oauthError);
+        classic22LinuxDoRedirect($archive, $redirectTo);
+    }
+
+    $code = trim((string) $archive->request->get('code'));
+
+    if ($code === '' || $state === '' || $returnToFromState === null) {
+        classic22LinuxDoSetError('Linux Do 授权状态校验失败，请重试。');
+        classic22LinuxDoRedirect($archive, $redirectTo);
+    }
+
+    $tokenResult = classic22LinuxDoExchangeCodeForToken($code, $options);
+    if (empty($tokenResult['ok'])) {
+        classic22LinuxDoSetError((string) ($tokenResult['message'] ?? '获取访问令牌失败'));
+        classic22LinuxDoRedirect($archive, $redirectTo);
+    }
+
+    $userResult = classic22LinuxDoFetchUserInfo((string) $tokenResult['access_token']);
+    if (empty($userResult['ok'])) {
+        classic22LinuxDoSetError((string) ($userResult['message'] ?? '获取用户信息失败'));
+        classic22LinuxDoRedirect($archive, $redirectTo);
+    }
+
+    $identity = classic22LinuxDoMapIdentity((array) $userResult['data']);
+    if ($identity === null) {
+        classic22LinuxDoSetError('用户信息无效，无法完成登录。');
+        classic22LinuxDoRedirect($archive, $redirectTo);
+    }
+
+    classic22LinuxDoPersistUser($identity, $options);
+    classic22LinuxDoCookieDelete('__classic22_linuxdo_error');
+
+    classic22LinuxDoRedirect($archive, $redirectTo);
+}
+
+function classic22LinuxDoHandleRequest($archive): void
+{
+    if (!is_object($archive)) {
+        return;
+    }
+
+    $action = trim((string) $archive->request->get('ldo_action'));
+    if (!in_array($action, ['login', 'logout', 'callback'], true)) {
+        return;
+    }
+
+    $returnTo = classic22LinuxDoNormalizeReturnTo((string) $archive->request->get('return_to'), $archive->options);
+
+    if ($action === 'logout') {
+        classic22LinuxDoClearSession();
+        classic22LinuxDoRedirect($archive, $returnTo);
+    }
+
+    if (!classic22LinuxDoIsConfigured($archive->options)) {
+        classic22LinuxDoSetError('请先在主题设置中填写 Linux Do Client ID。');
+        classic22LinuxDoRedirect($archive, $returnTo);
+    }
+
+    if ($action === 'login') {
+        classic22LinuxDoHandleLogin($archive);
+    }
+
+    if ($action === 'callback') {
+        classic22LinuxDoHandleCallback($archive);
+    }
+}
+
+function themeInit($archive)
+{
+    if (is_object($archive) && classic22LinuxDoIsConfigured($archive->options)) {
+        classic22LinuxDoEnsureSession();
+    }
+
+    classic22LinuxDoHandleRequest($archive);
 }
 
 function postMeta(
