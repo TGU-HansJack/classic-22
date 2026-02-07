@@ -1,0 +1,80 @@
+@charset "UTF-8";
+
+main.container-fluid {
+  padding-top: 4rem;
+  padding-bottom: 4rem;
+}
+
+.container-thin.container-wide {
+  max-width: 90vw;
+}
+
+.post-cards {
+  column-gap: 2.5rem;
+  column-width: 18rem;
+}
+
+.post-card {
+  display: inline-block;
+  width: 100%;
+  margin: 0;
+  margin-bottom: 2.5rem;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-background-color);
+  box-shadow: none;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.post-card-cover {
+  display: block;
+  position: relative;
+  text-decoration: none;
+  overflow: hidden;
+  background: var(--pico-muted-border-color);
+}
+
+.post-card-cover::before {
+  content: "";
+  display: block;
+  padding-top: 28.125%;
+}
+
+.post-card-cover img {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.post-card-inner {
+  padding: 1.5rem;
+}
+
+.post-card .entry-header {
+  margin-bottom: 1.25rem;
+}
+
+.post-card .entry-title {
+  margin-bottom: 0.75rem;
+  font-size: 1.25rem;
+}
+
+.post-card .entry-meta {
+  margin-bottom: 0;
+}
+
+.post-card-excerpt {
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.post-card .more {
+  margin-bottom: 0;
+}
