@@ -61,6 +61,39 @@ if ($this->is('index') && $this->getCurrentPage() === 1) {
             </li>
             <li class="desc"><?php $this->options->description() ?></li>
         <?php endif; ?>
+
+        <?php if (!empty($homeAnnouncements)): ?>
+            <li class="classic22-home-announcements">
+                <div class="classic22-announcement-rotator" data-announcement-rotator data-interval="3000">
+                    <ul class="classic22-announcement-list" aria-label="<?php _e('公告'); ?>">
+                        <?php foreach ($homeAnnouncements as $index => $announcement): ?>
+                        <li class="classic22-announcement-item<?php echo $index === 0 ? ' is-active' : ''; ?>" data-type="<?php echo htmlspecialchars($announcement['type'], ENT_QUOTES, $this->options->charset); ?>">
+                            <?php if (!empty($announcement['url'])): ?>
+                            <a class="classic22-announcement-link" href="<?php echo htmlspecialchars($announcement['url'], ENT_QUOTES, $this->options->charset); ?>">
+                            <?php else: ?>
+                            <div class="classic22-announcement-link">
+                            <?php endif; ?>
+                                <span class="classic22-announcement-mark" aria-hidden="true">
+                                    <?php if (!empty($announcement['emoji'])): ?>
+                                        <span class="classic22-announcement-emoji"><?php echo htmlspecialchars($announcement['emoji'], ENT_QUOTES, $this->options->charset); ?></span>
+                                    <?php else: ?>
+                                        <?php echo classic22HomeAnnouncementIconSvg($announcement['type']); ?>
+                                    <?php endif; ?>
+                                </span>
+                                <span class="classic22-announcement-text">
+                                    <?php echo htmlspecialchars($announcement['content'], ENT_QUOTES, $this->options->charset); ?>
+                                </span>
+                            <?php if (!empty($announcement['url'])): ?>
+                            </a>
+                            <?php else: ?>
+                            </div>
+                            <?php endif; ?>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+            </li>
+        <?php endif; ?>
         </ul>
 
         <ul>
@@ -70,39 +103,6 @@ if ($this->is('index') && $this->getCurrentPage() === 1) {
                 </label>
             </li>
         </ul>
-
-        <?php if (!empty($homeAnnouncements)): ?>
-        <div class="classic22-home-announcements">
-            <div class="classic22-announcement-rotator" data-announcement-rotator data-interval="3000">
-                <ul class="classic22-announcement-list" aria-label="<?php _e('公告'); ?>">
-                    <?php foreach ($homeAnnouncements as $index => $announcement): ?>
-                    <li class="classic22-announcement-item<?php echo $index === 0 ? ' is-active' : ''; ?>" data-type="<?php echo htmlspecialchars($announcement['type'], ENT_QUOTES, $this->options->charset); ?>">
-                        <?php if (!empty($announcement['url'])): ?>
-                        <a class="classic22-announcement-link" href="<?php echo htmlspecialchars($announcement['url'], ENT_QUOTES, $this->options->charset); ?>">
-                        <?php else: ?>
-                        <div class="classic22-announcement-link">
-                        <?php endif; ?>
-                            <span class="classic22-announcement-mark" aria-hidden="true">
-                                <?php if (!empty($announcement['emoji'])): ?>
-                                    <span class="classic22-announcement-emoji"><?php echo htmlspecialchars($announcement['emoji'], ENT_QUOTES, $this->options->charset); ?></span>
-                                <?php else: ?>
-                                    <?php echo classic22HomeAnnouncementIconSvg($announcement['type']); ?>
-                                <?php endif; ?>
-                            </span>
-                            <span class="classic22-announcement-text">
-                                <?php echo htmlspecialchars($announcement['content'], ENT_QUOTES, $this->options->charset); ?>
-                            </span>
-                        <?php if (!empty($announcement['url'])): ?>
-                        </a>
-                        <?php else: ?>
-                        </div>
-                        <?php endif; ?>
-                    </li>
-                    <?php endforeach; ?>
-                </ul>
-            </div>
-        </div>
-        <?php endif; ?>
     </nav>
 
     <nav class="site-nav">

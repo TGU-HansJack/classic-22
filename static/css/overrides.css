@@ -239,24 +239,30 @@
 }
 
 /* Home announcement bar (classic-22) */
-.site-navbar > nav:first-child {
-  flex-wrap: wrap;
+.site-navbar .site-name {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
 }
 
 .site-navbar .classic22-home-announcements {
-  flex: 0 0 100%;
-  order: 99;
-  padding-top: 0.25rem;
-  max-width: 100%;
-  overflow: hidden;
-  margin-left: calc(var(--pico-nav-element-spacing-horizontal) * -1);
+  flex: 0 0 auto;
+  max-width: none;
+  overflow: visible;
+  margin-left: 0;
+}
+
+.site-navbar .site-name > li.classic22-home-announcements {
+  padding-top: var(--pico-nav-link-spacing-vertical);
+  padding-bottom: var(--pico-nav-link-spacing-vertical);
 }
 
 .site-navbar .classic22-home-announcements .classic22-announcement-rotator {
   --classic22-anno-height: calc(1.5rem + var(--pico-nav-link-spacing-vertical) * 2);
   --classic22-anno-text-width: 20em;
   --classic22-anno-extra-width: 6rem;
-  width: min(calc(var(--classic22-anno-text-width) + var(--classic22-anno-extra-width)), 100%);
+  width: min(calc(var(--classic22-anno-text-width) + var(--classic22-anno-extra-width)), 72vw);
   max-width: 100%;
 }
 
@@ -320,14 +326,15 @@
   align-items: center;
   gap: 0.75rem;
   height: var(--classic22-anno-height);
-  padding: 0 1.5rem 0 calc(var(--pico-nav-element-spacing-horizontal) + var(--pico-nav-link-spacing-horizontal));
-  border: 1px solid var(--classic22-anno-border, var(--pico-muted-border-color));
+  padding: 0 1rem 0 0.6rem;
+  border: 0;
   border-radius: var(--pico-border-radius);
   background: var(--classic22-anno-bg, var(--pico-background-color));
   text-decoration: none;
   color: var(--classic22-anno-color, var(--classic22-anno-accent, inherit));
   font-weight: 600;
-  transition: box-shadow var(--pico-transition), border-color var(--pico-transition);
+  box-shadow: none;
+  transition: background-color var(--pico-transition), color var(--pico-transition);
 }
 
 .site-navbar .classic22-announcement-item .classic22-announcement-link {
@@ -339,7 +346,7 @@
 }
 
 .classic22-announcement-link:hover {
-  box-shadow: var(--pico-box-shadow);
+  box-shadow: none;
 }
 
 .classic22-announcement-mark {
@@ -396,11 +403,6 @@
 
 @supports (background: color-mix(in srgb, black 5%, white)) {
   .site-navbar .classic22-announcement-link {
-    border-color: color-mix(
-      in srgb,
-      var(--classic22-anno-accent, var(--pico-muted-border-color)) 30%,
-      var(--pico-muted-border-color)
-    );
     background: color-mix(
       in srgb,
       var(--classic22-anno-accent, var(--pico-background-color)) 8%,
@@ -410,11 +412,28 @@
 }
 
 @media (max-width: 576px) {
+  .site-navbar .site-name {
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+
   .site-navbar .classic22-home-announcements .classic22-announcement-rotator {
     --classic22-anno-height: calc(1.5rem + var(--pico-nav-link-spacing-vertical) * 2);
-    --classic22-anno-text-width: 100%;
-    --classic22-anno-extra-width: 0;
+    --classic22-anno-text-width: 14em;
+    --classic22-anno-extra-width: 3.5rem;
+    width: min(calc(var(--classic22-anno-text-width) + var(--classic22-anno-extra-width)), 60vw);
+  }
+
+  .site-navbar .classic22-home-announcements {
+    min-width: 0;
+  }
+
+  .site-navbar .classic22-home-announcements .classic22-announcement-list {
     width: 100%;
+  }
+
+  .site-navbar .classic22-home-announcements .classic22-announcement-rotator {
+    max-width: 100%;
   }
 
   .classic22-announcement-list {
@@ -426,7 +445,7 @@
   }
 
   .classic22-announcement-link {
-    padding: 0 0.75rem 0 calc(var(--pico-nav-element-spacing-horizontal) + var(--pico-nav-link-spacing-horizontal));
+    padding: 0 0.75rem 0 0.45rem;
     gap: 0.5rem;
   }
 }
