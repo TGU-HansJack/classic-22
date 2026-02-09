@@ -62,6 +62,7 @@
   align-items: center;
   gap: 0.38rem;
   margin-left: 0.2rem;
+  appearance: none;
   border: 1px solid var(--pico-muted-border-color);
   border-radius: 999px;
   padding: 0.17rem 0.5rem;
@@ -78,7 +79,15 @@
 
 .classic22-live-socket-status:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 var(--pico-outline-width) var(--pico-primary-focus);
+  box-shadow: none;
+}
+
+.classic22-live-socket-status:hover,
+.classic22-live-socket-status:focus,
+.classic22-live-socket-status:focus-visible,
+.classic22-live-socket-status:active {
+  outline: none;
+  box-shadow: none !important;
 }
 
 .classic22-live-socket-dot {
@@ -135,8 +144,8 @@
   position: absolute;
   right: 0;
   bottom: calc(100% + 0.55rem);
-  width: min(19.5rem, 82vw);
-  max-width: calc(100vw - 1.5rem);
+  width: min(19.5rem, calc(100vw - 1rem));
+  max-width: calc(100vw - 1rem);
   max-height: min(55vh, 18rem);
   overflow: auto;
   padding: 0.58rem 0.68rem;
@@ -144,7 +153,8 @@
   border-radius: 0.55rem;
   background: var(--pico-background-color);
   color: var(--pico-color);
-  box-shadow: var(--pico-box-shadow);
+  box-shadow: none;
+  transform: translateX(var(--classic22-live-socket-shift-x, 0px));
   text-align: left;
   z-index: 10;
 }
@@ -183,8 +193,8 @@
 
 @media (max-width: 600px) {
   .classic22-live-socket-tooltip {
-    right: -0.25rem;
-    width: min(16.5rem, 90vw);
+    right: 0;
+    width: min(16.5rem, calc(100vw - 1rem));
     max-height: 52vh;
   }
 }

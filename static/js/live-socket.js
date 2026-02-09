@@ -95,14 +95,42 @@
   function initFooterTooltip(statusButton, tooltip) {
     if (!statusButton || !tooltip) return;
 
+    function clampTooltipToViewport() {
+      const viewportWidth = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+      if (!viewportWidth) {
+        tooltip.style.removeProperty('--classic22-live-socket-shift-x');
+        return;
+      }
+
+      const gap = 8;
+      const rect = tooltip.getBoundingClientRect();
+      let shiftX = 0;
+
+      if (rect.right > viewportWidth - gap) {
+        shiftX -= rect.right - (viewportWidth - gap);
+      }
+
+      if (rect.left + shiftX < gap) {
+        shiftX += gap - (rect.left + shiftX);
+      }
+
+      if (shiftX === 0) {
+        tooltip.style.removeProperty('--classic22-live-socket-shift-x');
+      } else {
+        tooltip.style.setProperty('--classic22-live-socket-shift-x', `${Math.round(shiftX)}px`);
+      }
+    }
+
     function close() {
       tooltip.hidden = true;
+      tooltip.style.removeProperty('--classic22-live-socket-shift-x');
       statusButton.setAttribute('aria-expanded', 'false');
     }
 
     function open() {
       tooltip.hidden = false;
       statusButton.setAttribute('aria-expanded', 'true');
+      window.requestAnimationFrame(clampTooltipToViewport);
     }
 
     statusButton.addEventListener('click', (event) => {
@@ -126,6 +154,12 @@
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
         close();
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (!tooltip.hidden) {
+        clampTooltipToViewport();
       }
     });
   }
