@@ -62,6 +62,25 @@ if (!function_exists('v3aPostPreview')) {
     }
 }
 
+if (!function_exists('v3aPostFormatLocalTime')) {
+    function v3aPostFormatLocalTime(int $timestamp, string $format = 'Y-m-d H:i:s'): string
+    {
+        if ($timestamp <= 0) {
+            return '';
+        }
+
+        try {
+            if (class_exists('\\Typecho\\Date')) {
+                $date = new \Typecho\Date($timestamp);
+                return (string) $date->format($format);
+            }
+        } catch (\Throwable $e) {
+        }
+
+        return date($format, $timestamp);
+    }
+}
+
 if (!function_exists('v3aPostFieldRaw')) {
     function v3aPostFieldRaw(array $row): string
     {
@@ -1065,8 +1084,8 @@ reCAPTCHA v3 字段：reCAPTCHA_v3_id、reCAPTCHA_v3_key</div>
                                 ?>
                                 <div class="v3a-post-list-item">
                                     <div class="v3a-post-item-meta">
-                                        提交时间：<?php echo $created > 0 ? date('Y-m-d H:i:s', $created) : '-'; ?>
-                                        <?php if ($updated > 0): ?> ｜最后编辑：<?php echo date('Y-m-d H:i:s', $updated); ?><?php endif; ?>
+                                        提交时间：<?php echo $created > 0 ? v3aPostFormatLocalTime($created, 'Y-m-d H:i:s') : '-'; ?>
+                                        <?php if ($updated > 0): ?> ｜最后编辑：<?php echo v3aPostFormatLocalTime($updated, 'Y-m-d H:i:s'); ?><?php endif; ?>
                                     </div>
 
                                     <?php foreach ($schemas as $schema): ?>

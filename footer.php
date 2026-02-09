@@ -10,7 +10,7 @@ if ($liveWsEndpoint === '') {
 <footer class="site-footer container-fluid">
     <div class="d-flex justify-content-between">
         <ul class="list-inline text-muted">
-            <li>&copy; <?php echo date('Y'); ?> <a href="<?php $this->options->siteUrl(); ?>"><?php $this->options->title(); ?></a></li>
+            <li>&copy; <?php echo (new \Typecho\Date())->format('Y'); ?> <a href="<?php $this->options->siteUrl(); ?>"><?php $this->options->title(); ?></a></li>
             <li><a href="<?php $this->options->feedUrl(); ?>"><?php _e('RSS'); ?></a></li>
         </ul>
         <ul class="list-inline text-muted">
