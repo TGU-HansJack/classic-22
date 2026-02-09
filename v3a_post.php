@@ -172,6 +172,7 @@ if (!function_exists('v3aPostBuildSchema')) {
         $limit = 0;
         $siteKey = '';
         $secretKey = '';
+        $seq = 0;
 
         foreach ($rows as $row) {
             $name = trim((string) ($row['name'] ?? ''));
@@ -216,11 +217,18 @@ if (!function_exists('v3aPostBuildSchema')) {
                 $key .= 'x';
             }
 
+            $seqValue = $seq++;
+            $orderValue = array_key_exists('order', $json) && is_numeric($json['order'])
+                ? (int) $json['order']
+                : $seqValue;
+
             $schema = [
                 'key' => $key,
                 'name' => $name,
                 'label' => trim((string) ($json['label'] ?? '')) ?: $name,
                 'type' => $type,
+                'order' => $orderValue,
+                '_seq' => $seqValue,
                 'required' => v3aPostBool($json['required'] ?? false),
                 'description' => trim((string) ($json['description'] ?? '')),
                 'placeholder' => trim((string) ($json['placeholder'] ?? '')),
@@ -267,8 +275,30 @@ if (!function_exists('v3aPostBuildSchema')) {
             $schemas[$key] = $schema;
         }
 
+        $schemaList = array_values($schemas);
+        usort($schemaList, static function (array $a, array $b): int {
+            $oa = (int) ($a['order'] ?? 0);
+            $ob = (int) ($b['order'] ?? 0);
+            if ($oa !== $ob) {
+                return $oa <=> $ob;
+            }
+
+            $sa = (int) ($a['_seq'] ?? 0);
+            $sb = (int) ($b['_seq'] ?? 0);
+            if ($sa !== $sb) {
+                return $sa <=> $sb;
+            }
+
+            return strcmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+        });
+
+        foreach ($schemaList as &$schema) {
+            unset($schema['_seq']);
+        }
+        unset($schema);
+
         return [
-            'schemas' => array_values($schemas),
+            'schemas' => $schemaList,
             'limit' => $limit,
             'recaptcha_id' => $siteKey,
             'recaptcha_key' => $secretKey,
@@ -534,6 +564,147 @@ if (!function_exists('v3aPostVerifyCaptcha')) {
     }
 }
 
+if (!function_exists('v3aPostUrlWithParams')) {
+    function v3aPostUrlWithParams(string $url, array $set = [], array $remove = []): string
+    {
+        $parts = parse_url($url);
+        if ($parts === false) {
+            return $url;
+        }
+
+        $query = [];
+        if (!empty($parts['query'])) {
+            parse_str((string) $parts['query'], $query);
+        }
+
+        foreach ($remove as $name) {
+            $name = trim((string) $name);
+            if ($name !== '') {
+                unset($query[$name]);
+            }
+        }
+
+        foreach ($set as $name => $value) {
+            $name = trim((string) $name);
+            if ($name === '') {
+                continue;
+            }
+            if ($value === null || $value === '') {
+                unset($query[$name]);
+                continue;
+            }
+            $query[$name] = (string) $value;
+        }
+
+        $built = '';
+        if (isset($parts['scheme'])) {
+            $built .= $parts['scheme'] . '://';
+        }
+        if (isset($parts['user'])) {
+            $built .= $parts['user'];
+            if (isset($parts['pass'])) {
+                $built .= ':' . $parts['pass'];
+            }
+            $built .= '@';
+        }
+        if (isset($parts['host'])) {
+            $built .= $parts['host'];
+        }
+        if (isset($parts['port'])) {
+            $built .= ':' . $parts['port'];
+        }
+        $built .= (string) ($parts['path'] ?? '');
+
+        $queryString = http_build_query($query);
+        if ($queryString !== '') {
+            $built .= '?' . $queryString;
+        }
+        if (isset($parts['fragment']) && $parts['fragment'] !== '') {
+            $built .= '#' . $parts['fragment'];
+        }
+
+        return $built !== '' ? $built : $url;
+    }
+}
+
+if (!function_exists('v3aPostNoticeEncode')) {
+    function v3aPostNoticeEncode(string $type, string $message): string
+    {
+        $message = trim($message);
+        if ($message === '') {
+            return '';
+        }
+
+        $payload = json_encode([
+            't' => $type === 'error' ? 'error' : 'success',
+            'm' => $message,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        if (!is_string($payload) || $payload === '') {
+            return '';
+        }
+
+        return rtrim(strtr(base64_encode($payload), '+/', '-_'), '=');
+    }
+}
+
+if (!function_exists('v3aPostNoticeDecode')) {
+    function v3aPostNoticeDecode(string $token): array
+    {
+        $token = trim($token);
+        if ($token === '') {
+            return [];
+        }
+
+        $raw = strtr($token, '-_', '+/');
+        $pad = strlen($raw) % 4;
+        if ($pad > 0) {
+            $raw .= str_repeat('=', 4 - $pad);
+        }
+
+        $decoded = base64_decode($raw, true);
+        if (!is_string($decoded) || $decoded === '') {
+            return [];
+        }
+
+        $data = json_decode($decoded, true);
+        if (!is_array($data)) {
+            return [];
+        }
+
+        $type = (string) ($data['t'] ?? '');
+        if ($type !== 'error') {
+            $type = 'success';
+        }
+
+        $message = trim((string) ($data['m'] ?? ''));
+        if ($message === '') {
+            return [];
+        }
+
+        return [
+            'type' => $type,
+            'message' => $message,
+        ];
+    }
+}
+
+if (!function_exists('v3aPostRedirectWithNotice')) {
+    function v3aPostRedirectWithNotice(string $baseUrl, string $type, string $message): void
+    {
+        $token = v3aPostNoticeEncode($type, $message);
+        if ($token === '') {
+            return;
+        }
+
+        $target = v3aPostUrlWithParams($baseUrl, ['v3a_post_notice' => $token]);
+        if (!headers_sent()) {
+            header('Location: ' . $target, true, 303);
+            exit;
+        }
+    }
+}
+
 if (!headers_sent()) {
     header('X-Robots-Tag: noindex, nofollow, noarchive', true);
     header('X-Content-Type-Options: nosniff', true);
@@ -565,9 +736,16 @@ foreach ($schemas as $schema) {
 
 $request = $this->request;
 $security = \Helper::security();
-$csrfRef = (string) $request->getRequestUrl();
-$formAction = $csrfRef;
+$currentRequestUrl = (string) $request->getRequestUrl();
+$noticeFlash = v3aPostNoticeDecode((string) ($request->get('v3a_post_notice', '') ?? ''));
+$formAction = v3aPostUrlWithParams($currentRequestUrl, [], ['v3a_post_notice']);
+$csrfRef = $formAction;
 $csrfToken = (string) $security->getToken($csrfRef);
+
+if (!empty($noticeFlash)) {
+    $noticeType = (string) ($noticeFlash['type'] ?? 'success');
+    $noticeMessage = (string) ($noticeFlash['message'] ?? '');
+}
 
 if (!$storeReady) {
     $noticeType = 'error';
@@ -581,6 +759,7 @@ if ($storeReady && isset($_SERVER['REQUEST_METHOD']) && strtoupper((string) $_SE
         $noticeType = 'error';
         $noticeMessage = '请求已失效，请刷新后重试。';
     } elseif (trim((string) ($_POST['v3a_hp'] ?? '')) !== '') {
+        v3aPostRedirectWithNotice($formAction, 'success', '提交成功，请等待审核。');
         $noticeType = 'success';
         $noticeMessage = '提交成功，请等待审核。';
     } elseif ($action === 'admin_export') {
@@ -646,6 +825,7 @@ if ($storeReady && isset($_SERVER['REQUEST_METHOD']) && strtoupper((string) $_SE
                     $store['updated_at'] = time();
                     $store['submissions'] = array_values($submissions);
                     if (v3aPostStoreSave($storeFile, $store)) {
+                        v3aPostRedirectWithNotice($formAction, 'success', '投稿记录已更新。');
                         $noticeType = 'success';
                         $noticeMessage = '投稿记录已更新。';
                     } else {
@@ -684,6 +864,7 @@ if ($storeReady && isset($_SERVER['REQUEST_METHOD']) && strtoupper((string) $_SE
                         $store['updated_at'] = time();
                         $store['submissions'] = array_values($submissions);
                         if (v3aPostStoreSave($storeFile, $store)) {
+                            v3aPostRedirectWithNotice($formAction, 'success', '投稿已提交成功，感谢你的参与！');
                             $noticeType = 'success';
                             $noticeMessage = '投稿已提交成功，感谢你的参与！';
                             foreach ($schemas as $schema) {
@@ -789,8 +970,8 @@ if (!function_exists('v3aPostRenderField')) {
                         .v3a-post-field label{display:block;font-weight:600;margin-bottom:.35rem}
                         .v3a-post-required{color:#d63939;margin-left:.2rem}
                         .v3a-post-help{display:block;margin-top:.35rem;color:var(--pico-muted-color);font-size:.9rem}
-                        .v3a-post-check-list{display:grid;gap:.35rem}
-                        .v3a-post-check-list label{display:inline-flex;align-items:center;gap:.4rem;margin:0;font-weight:400}
+                        .v3a-post-check-list{display:flex;align-items:center;gap:.75rem;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;padding-bottom:.1rem}
+                        .v3a-post-check-list label{display:inline-flex;align-items:center;gap:.4rem;margin:0;font-weight:400;white-space:nowrap;flex:0 0 auto}
                         .v3a-post-form-actions{margin-top:.85rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
                         .v3a-post-hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
                         .v3a-post-config-tip{margin-top:.75rem;padding:.75rem;border:1px dashed var(--pico-muted-border-color);border-radius:var(--pico-border-radius);color:var(--pico-muted-color);font-size:.92rem;white-space:pre-wrap}
@@ -825,7 +1006,7 @@ if (!function_exists('v3aPostRenderField')) {
 }
 
 支持 type：input / editor / checkbox / radio / select
-可选字段：description、default、options、multiple、rows、inputType、maxLength、minLength
+可选字段：description、default、options、multiple、rows、inputType、maxLength、minLength、order
 限频字段：limit（秒）
 reCAPTCHA v3 字段：reCAPTCHA_v3_id、reCAPTCHA_v3_key</div>
                             <?php endif; ?>
