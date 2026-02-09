@@ -24,9 +24,6 @@ $classic22AiChatUrl = $classic22AiEnabled
 $classic22AiArticlesApiUrl = $classic22AiEnabled
     ? $classic22AiBaseUrl . '?classic22_ai=articles'
     : '';
-$classic22AiGuardToken = $classic22AiEnabled && function_exists('classic22AiBuildBootstrapToken')
-    ? classic22AiBuildBootstrapToken($this)
-    : '';
 ?>
 
 <main class="container-fluid">
@@ -105,7 +102,6 @@ $classic22AiGuardToken = $classic22AiEnabled && function_exists('classic22AiBuil
                     'defaultModel' => $classic22AiDefaultModel,
                     'provider' => (string) (function_exists('classic22LinuxDoGetOption') ? classic22LinuxDoGetOption($this->options, 'aiProvider', 'openai') : 'openai'),
                     'apiMode' => (string) (function_exists('classic22LinuxDoGetOption') ? classic22LinuxDoGetOption($this->options, 'aiApiMode', 'chat_completions') : 'chat_completions'),
-                    'aiToken' => $classic22AiGuardToken,
                     'articles' => $classic22AiArticles,
                     'labels' => [
                         'allArticles' => '全部文章',

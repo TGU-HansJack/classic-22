@@ -127,15 +127,7 @@
     }
 
     try {
-      const headers = {};
-      if (isNonEmptyString(state.aiToken)) {
-        headers['X-Classic22-AI-Token'] = String(state.aiToken).trim();
-      }
-
-      const response = await fetch(state.articlesApiUrl, {
-        method: 'GET',
-        headers,
-      });
+      const response = await fetch(state.articlesApiUrl, { method: 'GET' });
       if (!response.ok) return;
 
       const data = await response.json();
@@ -487,24 +479,12 @@
   }
 
   async function requestChatOnce(chatUrl, payload) {
-    const safePayload = payload && typeof payload === 'object' ? { ...payload } : {};
-    const aiToken = String(safePayload.aiToken || '').trim();
-    if (Object.prototype.hasOwnProperty.call(safePayload, 'aiToken')) {
-      delete safePayload.aiToken;
-    }
-
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-
-    if (aiToken) {
-      headers['X-Classic22-AI-Token'] = aiToken;
-    }
-
     const response = await fetch(chatUrl, {
       method: 'POST',
-      headers,
-      body: JSON.stringify(safePayload),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
     });
 
     let data = null;
@@ -555,7 +535,6 @@
         model: selectedModel,
         articleId: selectedArticleId,
         articleUrl: selectedArticle ? String(selectedArticle.permalink || '') : '',
-        aiToken: String(state.aiToken || '').trim(),
       };
 
       let { response, data } = await requestChatOnce(chatUrl, basePayload);
@@ -727,7 +706,6 @@
       labels,
       chatUrl: String(bootstrap.chatUrl || '').trim(),
       articlesApiUrl: String(bootstrap.articlesApiUrl || '').trim(),
-      aiToken: String(bootstrap.aiToken || '').trim(),
       articleMap,
       sending: false,
     };

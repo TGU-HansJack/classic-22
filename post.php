@@ -25,9 +25,6 @@ $classic22PostAiChatUrl = $classic22PostAiEnabled
 $classic22PostAiArticlesApiUrl = $classic22PostAiEnabled
     ? $classic22PostAiBaseUrl . '?classic22_ai=articles'
     : '';
-$classic22PostAiGuardToken = $classic22PostAiEnabled && function_exists('classic22AiBuildBootstrapToken')
-    ? classic22AiBuildBootstrapToken($this)
-    : '';
 ?>
 
 <main class="container">
@@ -130,7 +127,6 @@ $classic22PostAiGuardToken = $classic22PostAiEnabled && function_exists('classic
                     'articlesApiUrl' => $classic22PostAiArticlesApiUrl,
                     'models' => $classic22PostAiModels,
                     'defaultModel' => $classic22PostAiDefaultModel,
-                    'aiToken' => $classic22PostAiGuardToken,
                     'currentArticleId' => (int) ($this->cid ?? 0),
                     'articles' => $classic22PostAiArticles,
                     'labels' => [
