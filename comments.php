@@ -1,4 +1,4 @@
-<?php if (!defined('__TYPECHO_ROOT_DIR__')) exit; ?>
+﻿<?php if (!defined('__TYPECHO_ROOT_DIR__')) exit; ?>
 <?php
 $linuxDoEnabled = classic22LinuxDoIsConfigured($this->options);
 $linuxDoUser = $linuxDoEnabled ? classic22LinuxDoCurrentUser($this->options) : null;
@@ -25,6 +25,14 @@ $linuxDoLogoutUrl = classic22LinuxDoBuildActionUrl($this->options, 'logout', $cu
     margin: 0;
 }
 
+.classic22-comment-actions .classic22-linuxdo-box p {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
 .classic22-linuxdo-box.is-error {
     border-color: #d63939;
     color: #d63939;
@@ -35,12 +43,65 @@ $linuxDoLogoutUrl = classic22LinuxDoBuildActionUrl($this->options, 'logout', $cu
     align-items: center;
     justify-content: center;
     gap: .45rem;
+    width: 100%;
+    height: 100%;
+    line-height: 1;
     text-decoration: none;
 }
 
 .classic22-linuxdo-login svg {
-    width: 1em;
-    height: 1em;
+    display: block;
+    flex: 0 0 auto;
+    width: 2em;
+    height: 2em;
+}
+
+.classic22-linuxdo-login span {
+    display: inline-flex;
+    align-items: center;
+}
+
+.classic22-comment-actions {
+    display: flex;
+    align-items: stretch;
+    gap: .75rem;
+    margin-top: .75rem;
+}
+
+.classic22-comment-actions .classic22-comment-submit {
+    margin: 0;
+}
+
+.classic22-comment-actions.has-linuxdo-login .classic22-comment-submit,
+.classic22-comment-actions.has-linuxdo-login .classic22-linuxdo-box {
+    min-height: calc(1.5rem + var(--pico-form-element-spacing-vertical) * 2 + var(--pico-border-width) * 2);
+}
+
+.classic22-comment-actions.has-linuxdo-login .classic22-comment-submit {
+    flex: 0 0 calc(50% - .375rem);
+    max-width: calc(50% - .375rem);
+}
+
+.classic22-comment-actions .classic22-linuxdo-box {
+    margin: 0;
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 .8rem;
+}
+
+@media (max-width: 640px) {
+    .classic22-comment-actions {
+        flex-direction: column;
+        gap: .5rem;
+    }
+
+    .classic22-comment-actions.has-linuxdo-login .classic22-comment-submit,
+    .classic22-comment-actions .classic22-linuxdo-box {
+        flex: 1 1 auto;
+        max-width: none;
+    }
 }
 </style>
 
@@ -100,17 +161,6 @@ $linuxDoLogoutUrl = classic22LinuxDoBuildActionUrl($this->options, 'logout', $cu
                         <input type="hidden" name="mail" value="<?php echo htmlspecialchars((string) $linuxDoUser['mail'], ENT_QUOTES, $this->options->charset); ?>">
                         <input type="hidden" name="url" value="<?php echo htmlspecialchars((string) ($linuxDoUser['url'] ?? ''), ENT_QUOTES, $this->options->charset); ?>">
                     <?php else: ?>
-                        <?php if ($linuxDoEnabled): ?>
-                            <div class="classic22-linuxdo-box">
-                                <p>
-                                    <a class="classic22-linuxdo-login" href="<?php echo htmlspecialchars($linuxDoLoginUrl, ENT_QUOTES, $this->options->charset); ?>">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                                        <span><?php _e('使用 Linux Do 登录评论'); ?></span>
-                                    </a>
-                                </p>
-                            </div>
-                        <?php endif; ?>
-
                         <div class="grid">
                             <input type="text" placeholder="<?php _e('名字'); ?>" name="author" id="author" value="<?php $this->remember('author'); ?>" required/>
                             <input type="email" placeholder="<?php _e('Email'); ?>" name="mail" id="mail" value="<?php $this->remember('mail'); ?>"<?php if ($this->options->commentsRequireMail): ?> required<?php endif; ?> />
@@ -119,7 +169,26 @@ $linuxDoLogoutUrl = classic22LinuxDoBuildActionUrl($this->options, 'logout', $cu
                     <?php endif; ?>
                 <?php endif; ?>
 
-                <button type="submit"><?php _e('提交评论'); ?></button>
+                <div class="classic22-comment-actions<?php echo (!$this->user->hasLogin() && $linuxDoEnabled && !is_array($linuxDoUser)) ? ' has-linuxdo-login' : ''; ?>">
+                    <button type="submit" class="classic22-comment-submit"><?php _e('提交评论'); ?></button>
+
+                    <?php if (!$this->user->hasLogin() && $linuxDoEnabled && !is_array($linuxDoUser)): ?>
+                        <div class="classic22-linuxdo-box">
+                            <p>
+                                <a class="classic22-linuxdo-login" href="<?php echo htmlspecialchars($linuxDoLoginUrl, ENT_QUOTES, $this->options->charset); ?>">
+                                    <svg width="240" height="240" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                        <clipPath id="a"><circle cx="60" cy="60" r="47"/></clipPath>
+                                        <circle fill="#f0f0f0" cx="60" cy="60" r="50"/>
+                                        <rect fill="#1c1c1e" clip-path="url(#a)" x="10" y="10" width="100" height="30"/>
+                                        <rect fill="#f0f0f0" clip-path="url(#a)" x="10" y="40" width="100" height="40"/>
+                                        <rect fill="#ffb003" clip-path="url(#a)" x="10" y="80" width="100" height="30"/>
+                                    </svg>
+                                    <span>Linux Do 登录</span>
+                                </a>
+                            </p>
+                        </div>
+                    <?php endif; ?>
+                </div>
             </form>
         </div>
     <?php else: ?>
