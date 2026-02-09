@@ -1,12 +1,16 @@
 @charset "UTF-8";
 
 main.container-fluid {
-  padding-top: 4rem;
+  padding-top: 2.5rem;
   padding-bottom: 4rem;
 }
 
 .container-thin.container-wide {
   max-width: 90vw;
+}
+
+.classic22-home-layout {
+  margin-top: 0;
 }
 
 .post-cards {
@@ -616,7 +620,7 @@ body.classic22-post-ai-open {
   position: static;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 0.2rem;
   height: auto;
   padding: 0;
@@ -740,7 +744,7 @@ body.classic22-post-ai-open {
 }
 
 .post-card-meta-row .entry-meta {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   white-space: normal;
 }
@@ -752,7 +756,7 @@ body.classic22-post-ai-open {
 .post-card-meta-row .classic22-live-online-badge {
   flex: 0 0 auto;
   white-space: nowrap;
-  margin-left: auto;
+  margin-left: 0;
 }
 
 .post-card-meta-row .classic22-live-online-badge::before {
