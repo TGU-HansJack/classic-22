@@ -1687,6 +1687,131 @@ function classic22AiBuildSiteContext($archive): array
     return $context;
 }
 
+function classic22AiExtractGithubRepos(string $text): array
+{
+    if (trim($text) === '') {
+        return [];
+    }
+
+    $repos = [];
+    if (preg_match_all('#https?://github\.com/([^/\s]+)/([^/\s#?]+)#i', $text, $matches, PREG_SET_ORDER)) {
+        foreach ($matches as $match) {
+            $owner = strtolower(trim((string) ($match[1] ?? '')));
+            $repo = strtolower(trim((string) ($match[2] ?? '')));
+            $repo = preg_replace('/\.git$/i', '', $repo);
+            if (!is_string($repo)) {
+                $repo = '';
+            }
+            $repo = trim($repo);
+
+            if ($owner === '' || $repo === '') {
+                continue;
+            }
+
+            $key = $owner . '/' . $repo;
+            $repos[$key] = $key;
+        }
+    }
+
+    return array_values($repos);
+}
+
+function classic22AiBuildGithubContext($archive): array
+{
+    $result = [
+        'repoMentions' => [],
+        'topRepos' => [],
+    ];
+
+    if (!is_object($archive) || !($archive instanceof \Widget\Archive)) {
+        return $result;
+    }
+
+    $recentPosts = classic22AiAllocRecentPosts(120);
+    if (!is_object($recentPosts)) {
+        return $result;
+    }
+
+    $repoMap = [];
+
+    try {
+        while ($recentPosts->next()) {
+            $cid = (int) ($recentPosts->cid ?? 0);
+            if ($cid <= 0) {
+                continue;
+            }
+
+            $title = trim((string) ($recentPosts->title ?? ''));
+            $comments = classic22AiNumericValue($recentPosts->commentsNum ?? 0);
+            $views = classic22AiResolvePostViews($recentPosts);
+            $permalink = trim((string) ($recentPosts->permalink ?? ''));
+
+            $content = trim((string) ($recentPosts->content ?? ''));
+            if ($content === '') {
+                $content = classic22AiLoadPostTextByCid($cid);
+            }
+
+            $repos = classic22AiExtractGithubRepos($content);
+            if (empty($repos)) {
+                continue;
+            }
+
+            $result['repoMentions'][] = [
+                'title' => $title,
+                'permalink' => $permalink,
+                'repos' => $repos,
+            ];
+
+            foreach ($repos as $repoKey) {
+                if (!isset($repoMap[$repoKey])) {
+                    $repoMap[$repoKey] = [
+                        'repo' => $repoKey,
+                        'count' => 0,
+                        'postTitles' => [],
+                        'comments' => 0,
+                        'views' => 0,
+                    ];
+                }
+
+                $repoMap[$repoKey]['count']++;
+                $repoMap[$repoKey]['comments'] += $comments;
+                $repoMap[$repoKey]['views'] += $views;
+                if ($title !== '' && !in_array($title, $repoMap[$repoKey]['postTitles'], true)) {
+                    $repoMap[$repoKey]['postTitles'][] = $title;
+                }
+            }
+        }
+    } catch (\Throwable $exception) {
+        return $result;
+    }
+
+    if (!empty($repoMap)) {
+        $topRepos = array_values($repoMap);
+        usort($topRepos, static function ($left, $right): int {
+            $leftCount = (int) ($left['count'] ?? 0);
+            $rightCount = (int) ($right['count'] ?? 0);
+            if ($leftCount !== $rightCount) {
+                return $rightCount <=> $leftCount;
+            }
+
+            $leftComments = (int) ($left['comments'] ?? 0);
+            $rightComments = (int) ($right['comments'] ?? 0);
+            if ($leftComments !== $rightComments) {
+                return $rightComments <=> $leftComments;
+            }
+
+            $leftViews = (int) ($left['views'] ?? 0);
+            $rightViews = (int) ($right['views'] ?? 0);
+            return $rightViews <=> $leftViews;
+        });
+
+        $result['topRepos'] = array_slice($topRepos, 0, 12);
+        $result['repoMentions'] = array_slice($result['repoMentions'], 0, 12);
+    }
+
+    return $result;
+}
+
 function classic22AiAllocRecentPosts(int $limit = 80)
 {
     $rule = 'pageSize=' . max(1, $limit);
@@ -2263,6 +2388,7 @@ function classic22AiResponseBodyExcerpt(array $response, int $limit = 240): stri
 function classic22AiBuildMessages($archive, string $prompt, string $question, ?array $article): array
 {
     $context = classic22AiBuildSiteContext($archive);
+    $githubContext = classic22AiBuildGithubContext($archive);
 
     $systemContent = $prompt;
 
@@ -2364,6 +2490,25 @@ function classic22AiBuildMessages($archive, string $prompt, string $question, ?a
         }
         if (!empty($recentLines)) {
             $systemContent .= "\n\n【近期文章摘要】\n" . implode("\n", $recentLines);
+        }
+    }
+
+    if (!empty($githubContext['topRepos'])) {
+        $repoLines = [];
+        foreach ($githubContext['topRepos'] as $item) {
+            $repo = trim((string) ($item['repo'] ?? ''));
+            if ($repo === '') {
+                continue;
+            }
+
+            $repoLines[] = $repo
+                . '（被提及 ' . (int) ($item['count'] ?? 0)
+                . ' 次，相关文章总评论 ' . (int) ($item['comments'] ?? 0)
+                . '，总浏览 ' . (int) ($item['views'] ?? 0) . '）';
+        }
+
+        if (!empty($repoLines)) {
+            $systemContent .= "\n\n【GitHub 仓库提及统计】\n" . implode("\n", $repoLines);
         }
     }
 

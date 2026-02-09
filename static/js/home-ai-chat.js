@@ -341,13 +341,18 @@
 
   function enterChatMode(state) {
     const { layout, root, chatTop, messageList } = state;
-    if (!layout || !root) return;
+    if (!root) return;
 
-    layout.classList.add('is-ai-chatting');
+    if (layout) {
+      layout.classList.add('is-ai-chatting');
+    }
     root.classList.add('is-chat-mode');
 
     if (chatTop) {
-      chatTop.hidden = false;
+      const hasTopContent =
+        chatTop.children.length > 0 ||
+        ((chatTop.textContent || '').trim() !== '');
+      chatTop.hidden = !hasTopContent;
     }
 
     if (messageList) {
@@ -357,9 +362,11 @@
 
   function leaveChatMode(state) {
     const { layout, root, chatTop, messageList, input } = state;
-    if (!layout || !root) return;
+    if (!root) return;
 
-    layout.classList.remove('is-ai-chatting');
+    if (layout) {
+      layout.classList.remove('is-ai-chatting');
+    }
     root.classList.remove('is-chat-mode');
 
     if (chatTop) {
@@ -612,6 +619,51 @@
     });
   }
 
+  function bindPostDrawer(state) {
+    const root = state && state.root ? state.root : null;
+    if (!root) return;
+
+    const drawer = root.closest('[data-post-ai-drawer]');
+    if (!drawer) return;
+
+    const closeButton = drawer.querySelector('[data-post-ai-close]');
+    const openButton = document.querySelector('[data-post-ai-toggle]');
+
+    const closeDrawer = () => {
+      drawer.hidden = true;
+      document.body.classList.remove('classic22-post-ai-open');
+      leaveChatMode(state);
+    };
+
+    const openDrawer = () => {
+      drawer.hidden = false;
+      document.body.classList.add('classic22-post-ai-open');
+      if (state.input) {
+        setTimeout(() => state.input.focus(), 20);
+      }
+    };
+
+    if (openButton) {
+      openButton.addEventListener('click', openDrawer);
+    }
+
+    if (closeButton) {
+      closeButton.addEventListener('click', closeDrawer);
+    }
+
+    drawer.addEventListener('click', (event) => {
+      if (event.target === drawer) {
+        closeDrawer();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !drawer.hidden) {
+        closeDrawer();
+      }
+    });
+  }
+
   function initRoot(root) {
     const bootstrap = parseBootstrap(root);
     if (!bootstrap) return;
@@ -658,8 +710,16 @@
       sending: false,
     };
 
+    if (articleSelect && bootstrap.currentArticleId) {
+      const currentId = String(bootstrap.currentArticleId || '0');
+      if (currentId !== '0' && articleSelect.querySelector(`option[value="${currentId}"]`)) {
+        articleSelect.value = currentId;
+      }
+    }
+
     bindSubmit(state);
     bindBack(state);
+    bindPostDrawer(state);
     bindSelectCarets(state);
     attachArticleSelectHandler(state);
     if (articleSelect) {
