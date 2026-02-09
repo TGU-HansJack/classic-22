@@ -147,6 +147,18 @@ main.container-fluid {
   font-size: 1.25rem;
 }
 
+.post-card .entry-title a {
+  color: var(--pico-h2-color);
+  text-decoration: none;
+}
+
+.post-card .entry-title a:hover,
+.post-card .entry-title a:focus,
+.post-card .entry-title a:focus-visible {
+  color: var(--pico-primary);
+  text-decoration: underline;
+}
+
 .post-card .entry-meta {
   margin-bottom: 0;
 }

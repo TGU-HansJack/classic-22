@@ -5,6 +5,21 @@
  * - Ensure <del> shows strikethrough
  */
 
+:root,
+:root:not([data-theme=dark]),
+[data-theme=light],
+[data-theme=dark] {
+  --pico-primary: #0969da;
+  --pico-primary-background: #0969da;
+  --pico-primary-border: #0969da;
+  --pico-primary-underline: rgba(9, 105, 218, 0.5);
+  --pico-primary-hover: #0969da;
+  --pico-primary-hover-background: #0969da;
+  --pico-primary-hover-border: #0969da;
+  --pico-primary-hover-underline: #0969da;
+  --pico-primary-focus: rgba(9, 105, 218, 0.35);
+}
+
 .fmt del {
   text-decoration: line-through;
 }
