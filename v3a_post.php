@@ -986,7 +986,11 @@ if (!function_exists('v3aPostRenderField')) {
                         .v3a-post-notice.is-success{border-color:rgba(46,160,67,.45);color:#2ea043}
                         .v3a-post-notice.is-error{border-color:rgba(214,57,57,.45);color:#d63939}
                         .v3a-post-grid{display:grid;gap:.8rem}
-                        .v3a-post-field label{display:block;font-weight:600;margin-bottom:.35rem}
+                        .v3a-post-field > label{display:block;font-weight:600;margin-bottom:.35rem}
+                        .v3a-post-field.v3a-post-field-inline{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap}
+                        .v3a-post-field.v3a-post-field-inline > label{display:inline-flex;align-items:center;margin:0;white-space:nowrap;flex:0 0 auto}
+                        .v3a-post-field.v3a-post-field-inline > .v3a-post-check-list{display:inline-flex;align-items:center;gap:.75rem;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;padding-bottom:0;flex:1 1 auto}
+                        .v3a-post-field.v3a-post-field-inline > .v3a-post-help{flex:1 0 100%;margin-top:0}
                         .v3a-post-required{color:#d63939;margin-left:.2rem}
                         .v3a-post-help{display:block;margin-top:.35rem;color:var(--pico-muted-color);font-size:.9rem}
                         .v3a-post-check-list{display:flex;align-items:center;gap:.75rem;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;padding-bottom:.1rem}
@@ -1042,9 +1046,14 @@ reCAPTCHA v3 字段：reCAPTCHA_v3_id、reCAPTCHA_v3_key</div>
                                         $fieldName = (string) ($schema['name'] ?? '');
                                         $fieldLabel = (string) ($schema['label'] ?? $fieldName);
                                         $fieldKey = (string) ($schema['key'] ?? '');
+                                        $fieldType = (string) ($schema['type'] ?? 'input');
                                         $fieldValue = $formValues[$fieldName] ?? ($schema['default'] ?? '');
+                                        $fieldClass = 'v3a-post-field';
+                                        if (in_array($fieldType, ['checkbox', 'radio'], true)) {
+                                            $fieldClass .= ' v3a-post-field-inline';
+                                        }
                                         ?>
-                                        <div class="v3a-post-field">
+                                        <div class="<?php echo v3aPostH($fieldClass, $charset); ?>">
                                             <label for="<?php echo v3aPostH('v3a-post-' . $fieldKey, $charset); ?>"><?php echo v3aPostH($fieldLabel, $charset); ?><?php if (!empty($schema['required'])): ?><span class="v3a-post-required">*</span><?php endif; ?></label>
                                             <?php v3aPostRenderField($schema, $fieldValue, 'v3a_post_data[' . $fieldKey . ']', 'v3a-post-' . $fieldKey, $charset, !empty($schema['required'])); ?>
                                             <?php if (!empty($schema['description'])): ?><small class="v3a-post-help"><?php echo v3aPostH((string) $schema['description'], $charset); ?></small><?php endif; ?>
@@ -1124,9 +1133,14 @@ reCAPTCHA v3 字段：reCAPTCHA_v3_id、reCAPTCHA_v3_key</div>
                                                         $fieldName = (string) ($schema['name'] ?? '');
                                                         $fieldLabel = (string) ($schema['label'] ?? $fieldName);
                                                         $fieldKey = (string) ($schema['key'] ?? '');
+                                                        $fieldType = (string) ($schema['type'] ?? 'input');
                                                         $fieldValue = $entryValues[$fieldName] ?? ($schema['default'] ?? '');
+                                                        $fieldClass = 'v3a-post-field';
+                                                        if (in_array($fieldType, ['checkbox', 'radio'], true)) {
+                                                            $fieldClass .= ' v3a-post-field-inline';
+                                                        }
                                                         ?>
-                                                        <div class="v3a-post-field">
+                                                        <div class="<?php echo v3aPostH($fieldClass, $charset); ?>">
                                                             <label for="<?php echo v3aPostH('v3a-edit-' . $entryId . '-' . $fieldKey, $charset); ?>"><?php echo v3aPostH($fieldLabel, $charset); ?></label>
                                                             <?php v3aPostRenderField($schema, $fieldValue, 'v3a_post_data[' . $fieldKey . ']', 'v3a-edit-' . $entryId . '-' . $fieldKey, $charset, false); ?>
                                                         </div>
