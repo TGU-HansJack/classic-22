@@ -46,6 +46,7 @@ window.CLASSIC22_LIVE_WS = {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/content-enhance.js'); ?>" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/live-socket.js'); ?>" defer></script>
+<script src="<?php $this->options->themeUrl('static/js/home-ai-chat.js'); ?>" defer></script>
 
 <?php $this->footer(); ?>
 

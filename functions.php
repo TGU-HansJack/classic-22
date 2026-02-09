@@ -304,6 +304,87 @@ HTML;
     );
     $form->addInput($liveWsEndpoint);
 
+    $aiEnabled = new \Typecho\Widget\Helper\Form\Element\Select(
+        'aiEnabled',
+        [
+            '1' => _t('开启'),
+            '0' => _t('关闭'),
+        ],
+        '1',
+        _t('首页 AI 对话'),
+        _t('在首页文章列表上方显示 AI 对话输入框。')
+    );
+    $form->addInput($aiEnabled);
+
+    $aiProvider = new \Typecho\Widget\Helper\Form\Element\Select(
+        'aiProvider',
+        [
+            'openai' => _t('OpenAI 兼容接口'),
+            'rightcode' => _t('Right Code (GPT-Codex)'),
+        ],
+        'openai',
+        _t('AI 接口类型'),
+        _t('支持 OpenAI 兼容接口与 Right Code。')
+    );
+    $form->addInput($aiProvider);
+
+    $aiApiMode = new \Typecho\Widget\Helper\Form\Element\Select(
+        'aiApiMode',
+        [
+            'chat_completions' => _t('chat/completions 兼容接口'),
+            'responses' => _t('responses 接口（Right Code 推荐）'),
+        ],
+        'chat_completions',
+        _t('AI 请求模式'),
+        _t('OpenAI 兼容通常使用 chat/completions；Right Code 建议使用 responses。')
+    );
+    $form->addInput($aiApiMode);
+
+    $aiApiBaseUrl = new \Typecho\Widget\Helper\Form\Element\Text(
+        'aiApiBaseUrl',
+        null,
+        'https://api.openai.com/v1',
+        _t('AI 接口地址'),
+        _t('例如 https://api.openai.com/v1 或其他 OpenAI 兼容服务地址。')
+    );
+    $form->addInput($aiApiBaseUrl);
+
+    $aiApiKey = new \Typecho\Widget\Helper\Form\Element\Password(
+        'aiApiKey',
+        null,
+        (string) (classic22LinuxDoFallbackConfig()['aiApiKey'] ?? ''),
+        _t('AI API Key'),
+        _t('用于服务端请求 AI。留空时将保留已保存的 Key。')
+    );
+    $form->addInput($aiApiKey);
+
+    $aiModels = new \Typecho\Widget\Helper\Form\Element\Textarea(
+        'aiModels',
+        null,
+        "gpt-4o-mini\ngpt-4.1-mini\ngpt-4o",
+        _t('AI 模型列表'),
+        _t('每行一个模型名称，首页右下角下拉框将显示此列表。')
+    );
+    $form->addInput($aiModels);
+
+    $aiDefaultModel = new \Typecho\Widget\Helper\Form\Element\Text(
+        'aiDefaultModel',
+        null,
+        'gpt-4o-mini',
+        _t('默认 AI 模型'),
+        _t('为空时自动使用模型列表第一项。')
+    );
+    $form->addInput($aiDefaultModel);
+
+    $aiSystemPrompt = new \Typecho\Widget\Helper\Form\Element\Textarea(
+        'aiSystemPrompt',
+        null,
+        '你是博客首页 AI 助手，请使用中文简洁回答用户问题。',
+        _t('AI 系统提示词（可选）'),
+        _t('可留空；留空时使用主题内置提示词。')
+    );
+    $form->addInput($aiSystemPrompt);
+
 
     return;
 
@@ -445,7 +526,20 @@ function classic22LinuxDoSaveFallbackConfig(array $config): void
 
 function classic22LinuxDoExtractSettingsFromRequest(): array
 {
-    $keys = ['linuxDoClientId', 'linuxDoClientSecret', 'liveWsEnabled', 'liveWsEndpoint'];
+    $keys = [
+        'linuxDoClientId',
+        'linuxDoClientSecret',
+        'liveWsEnabled',
+        'liveWsEndpoint',
+        'aiEnabled',
+        'aiProvider',
+        'aiApiMode',
+        'aiApiBaseUrl',
+        'aiApiKey',
+        'aiModels',
+        'aiDefaultModel',
+        'aiSystemPrompt',
+    ];
     $extracted = [];
 
     foreach ($keys as $key) {
@@ -497,25 +591,25 @@ function themeConfigHandle(array $settings, bool $isInit)
     classic22LinuxDoThemeConfig(true);
 
     $fallbackConfig = classic22LinuxDoFallbackConfig();
-    $linuxDoKeys = ['linuxDoClientId', 'linuxDoClientSecret'];
+    $secretKeys = ['linuxDoClientId', 'linuxDoClientSecret', 'aiApiKey'];
 
-    foreach ($linuxDoKeys as $linuxDoKey) {
-        if (!array_key_exists($linuxDoKey, $mergedSettings)) {
+    foreach ($secretKeys as $secretKey) {
+        if (!array_key_exists($secretKey, $mergedSettings)) {
             continue;
         }
 
-        $newValue = trim((string) $mergedSettings[$linuxDoKey]);
+        $newValue = trim((string) $mergedSettings[$secretKey]);
 
         if (
-            $linuxDoKey === 'linuxDoClientSecret'
+            in_array($secretKey, ['linuxDoClientSecret', 'aiApiKey'], true)
             && $newValue === ''
-            && isset($fallbackConfig[$linuxDoKey])
-            && trim((string) $fallbackConfig[$linuxDoKey]) !== ''
+            && isset($fallbackConfig[$secretKey])
+            && trim((string) $fallbackConfig[$secretKey]) !== ''
         ) {
             continue;
         }
 
-        $fallbackConfig[$linuxDoKey] = $newValue;
+        $fallbackConfig[$secretKey] = $newValue;
     }
 
     classic22LinuxDoSaveFallbackConfig($fallbackConfig);
@@ -1214,6 +1308,8 @@ function classic22LinuxDoHandleRequest($archive): void
 
 function themeInit($archive)
 {
+    classic22AiHandleRequest($archive);
+
     if (is_object($archive) && classic22LinuxDoIsConfigured($archive->options)) {
         classic22LinuxDoEnsureSession();
     }
@@ -1291,17 +1387,1325 @@ function postCoverUrl(\Widget\Archive $archive): ?string
     return null;
 }
 
-function postExcerptText(\Widget\Archive $archive, int $length = 140, string $trim = '...'): string
+function classic22ArchiveCharset($archive): string
 {
-    $text = strip_tags($archive->excerpt ?? '');
-    $text = html_entity_decode($text, ENT_QUOTES, $archive->options->charset);
+    try {
+        $charset = (string) ($archive->options->charset ?? 'UTF-8');
+        return $charset !== '' ? $charset : 'UTF-8';
+    } catch (\Throwable $exception) {
+        return 'UTF-8';
+    }
+}
+
+function postExcerptText($archive, int $length = 140, string $trim = '...'): string
+{
+    $charset = classic22ArchiveCharset($archive);
+    $text = strip_tags((string) ($archive->excerpt ?? ''));
+    $text = html_entity_decode($text, ENT_QUOTES, $charset);
     $text = trim(preg_replace('/\\s+/u', ' ', $text ?? ''));
 
     if ($text === '') {
-        $text = html_entity_decode($archive->title, ENT_QUOTES, $archive->options->charset);
+        $text = html_entity_decode((string) ($archive->title ?? ''), ENT_QUOTES, $charset);
     }
 
     return \Typecho\Common::subStr($text, 0, $length, $trim);
+}
+
+function classic22AiNumericValue($value): int
+{
+    $number = (int) $value;
+    return $number > 0 ? $number : 0;
+}
+
+function classic22AiResolvePostViews($post): int
+{
+    $viewFields = ['views', 'view', 'hits', 'pv', 'visits'];
+
+    foreach ($viewFields as $field) {
+        try {
+            if (isset($post->fields->{$field})) {
+                $number = classic22AiNumericValue($post->fields->{$field});
+                if ($number > 0) {
+                    return $number;
+                }
+            }
+        } catch (\Throwable $exception) {
+        }
+
+        try {
+            if (isset($post->{$field})) {
+                $number = classic22AiNumericValue($post->{$field});
+                if ($number > 0) {
+                    return $number;
+                }
+            }
+        } catch (\Throwable $exception) {
+        }
+    }
+
+    return 0;
+}
+
+function classic22AiFetchPostViewCounts($db, int $limit = 300): array
+{
+    if (!is_object($db)) {
+        return [];
+    }
+
+    $counts = [];
+
+    try {
+        if (!class_exists('\\TypechoPlugin\\Vue3Admin\\LocalStorage')) {
+            $file = __TYPECHO_ROOT_DIR__ . '/usr/plugins/Vue3Admin/LocalStorage.php';
+            if (is_file($file)) {
+                require_once $file;
+            }
+        }
+
+        if (class_exists('\\TypechoPlugin\\Vue3Admin\\LocalStorage')) {
+            $pdo = \TypechoPlugin\Vue3Admin\LocalStorage::pdo();
+            if ($pdo instanceof \PDO) {
+                $stmt = $pdo->query('SELECT cid, COUNT(id) AS views FROM v3a_visit_log WHERE cid > 0 GROUP BY cid ORDER BY views DESC LIMIT ' . max(1, (int) $limit));
+                foreach ((array) $stmt->fetchAll() as $row) {
+                    $cid = (int) ($row['cid'] ?? 0);
+                    $views = (int) ($row['views'] ?? 0);
+                    if ($cid > 0 && $views > 0) {
+                        $counts[$cid] = $views;
+                    }
+                }
+                if (!empty($counts)) {
+                    return $counts;
+                }
+            }
+        }
+    } catch (\Throwable $exception) {
+    }
+
+    try {
+        $rows = (array) $db->fetchAll(
+            $db->select('cid', ['COUNT(id)' => 'views'])
+                ->from('table.v3a_visit_log')
+                ->where('cid > ?', 0)
+                ->group('cid')
+                ->order('views', \Typecho\Db::SORT_DESC)
+                ->limit(max(1, (int) $limit))
+        );
+
+        foreach ($rows as $row) {
+            $cid = (int) ($row['cid'] ?? 0);
+            $views = (int) ($row['views'] ?? 0);
+            if ($cid > 0 && $views > 0) {
+                $counts[$cid] = $views;
+            }
+        }
+    } catch (\Throwable $exception) {
+    }
+
+    return $counts;
+}
+
+function classic22AiBuildSiteContext($archive): array
+{
+    $context = [
+        'site' => [
+            'posts' => 0,
+            'comments' => 0,
+            'categories' => 0,
+        ],
+        'topComments' => [],
+        'topViews' => [],
+        'recentPosts' => [],
+        'authors' => [],
+        'categories' => [],
+        'tags' => [],
+    ];
+
+    if (!is_object($archive)) {
+        return $context;
+    }
+
+    $db = null;
+    try {
+        $db = \Typecho\Db::get();
+    } catch (\Throwable $exception) {
+        $db = null;
+    }
+
+    try {
+        \Widget\Stat::alloc()->to($statWidget);
+        $context['site']['posts'] = (int) ($statWidget->publishedPostsNum ?? 0);
+        $context['site']['comments'] = (int) ($statWidget->publishedCommentsNum ?? 0);
+        $context['site']['categories'] = (int) ($statWidget->categoriesNum ?? 0);
+    } catch (\Throwable $exception) {
+    }
+
+    $recentPosts = classic22AiBuildArticleListPayload($archive, 120);
+    if (!empty($recentPosts)) {
+        $context['recentPosts'] = array_map(static function (array $item): array {
+            return [
+                'id' => (int) ($item['id'] ?? 0),
+                'title' => trim((string) ($item['title'] ?? '')),
+                'comments' => (int) ($item['comments'] ?? 0),
+                'views' => (int) ($item['views'] ?? 0),
+                'date' => trim((string) ($item['date'] ?? '')),
+                'excerpt' => trim((string) ($item['excerpt'] ?? '')),
+            ];
+        }, array_slice($recentPosts, 0, 15));
+
+        $commentRank = $recentPosts;
+        usort($commentRank, static function ($left, $right): int {
+            $leftComments = (int) ($left['comments'] ?? 0);
+            $rightComments = (int) ($right['comments'] ?? 0);
+            if ($leftComments !== $rightComments) {
+                return $rightComments <=> $leftComments;
+            }
+            return (int) ($right['id'] ?? 0) <=> (int) ($left['id'] ?? 0);
+        });
+        $context['topComments'] = array_map(static function (array $item): array {
+            return [
+                'id' => (int) ($item['id'] ?? 0),
+                'title' => trim((string) ($item['title'] ?? '')),
+                'comments' => (int) ($item['comments'] ?? 0),
+                'views' => (int) ($item['views'] ?? 0),
+            ];
+        }, array_slice($commentRank, 0, 10));
+
+        $viewRank = $recentPosts;
+        $viewCounts = classic22AiFetchPostViewCounts($db, 300);
+        if (!empty($viewCounts)) {
+            foreach ($viewRank as &$itemRef) {
+                $cid = (int) ($itemRef['id'] ?? 0);
+                if ($cid > 0 && isset($viewCounts[$cid])) {
+                    $itemRef['views'] = (int) $viewCounts[$cid];
+                }
+            }
+            unset($itemRef);
+        }
+
+        usort($viewRank, static function ($left, $right): int {
+            $leftViews = (int) ($left['views'] ?? 0);
+            $rightViews = (int) ($right['views'] ?? 0);
+            if ($leftViews !== $rightViews) {
+                return $rightViews <=> $leftViews;
+            }
+            return (int) ($right['id'] ?? 0) <=> (int) ($left['id'] ?? 0);
+        });
+
+        $context['topViews'] = array_map(static function (array $item): array {
+            return [
+                'id' => (int) ($item['id'] ?? 0),
+                'title' => trim((string) ($item['title'] ?? '')),
+                'views' => (int) ($item['views'] ?? 0),
+                'comments' => (int) ($item['comments'] ?? 0),
+            ];
+        }, array_slice($viewRank, 0, 10));
+    }
+
+    if (is_object($db)) {
+        try {
+            $authorRows = (array) $db->fetchAll(
+                $db->select('table.users.screenName', ['COUNT(table.contents.cid)' => 'posts'])
+                    ->from('table.contents')
+                    ->join('table.users', 'table.contents.authorId = table.users.uid')
+                    ->where('table.contents.type = ?', 'post')
+                    ->where('table.contents.status = ?', 'publish')
+                    ->group('table.contents.authorId')
+                    ->order('posts', \Typecho\Db::SORT_DESC)
+                    ->limit(8)
+            );
+
+            foreach ($authorRows as $row) {
+                $name = trim((string) ($row['screenName'] ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+                $context['authors'][] = [
+                    'name' => $name,
+                    'posts' => (int) ($row['posts'] ?? 0),
+                ];
+            }
+        } catch (\Throwable $exception) {
+        }
+
+        try {
+            $categoryRows = (array) $db->fetchAll(
+                $db->select('table.metas.name', 'table.metas.slug', ['COUNT(table.relationships.cid)' => 'posts'])
+                    ->from('table.metas')
+                    ->join('table.relationships', 'table.relationships.mid = table.metas.mid')
+                    ->join('table.contents', 'table.relationships.cid = table.contents.cid')
+                    ->where('table.metas.type = ?', 'category')
+                    ->where('table.contents.type = ?', 'post')
+                    ->where('table.contents.status = ?', 'publish')
+                    ->group('table.metas.mid')
+                    ->order('posts', \Typecho\Db::SORT_DESC)
+                    ->limit(12)
+            );
+
+            foreach ($categoryRows as $row) {
+                $name = trim((string) ($row['name'] ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+                $context['categories'][] = [
+                    'name' => $name,
+                    'slug' => trim((string) ($row['slug'] ?? '')),
+                    'posts' => (int) ($row['posts'] ?? 0),
+                ];
+            }
+        } catch (\Throwable $exception) {
+        }
+
+        try {
+            $tagRows = (array) $db->fetchAll(
+                $db->select('table.metas.name', 'table.metas.slug', ['COUNT(table.relationships.cid)' => 'posts'])
+                    ->from('table.metas')
+                    ->join('table.relationships', 'table.relationships.mid = table.metas.mid')
+                    ->join('table.contents', 'table.relationships.cid = table.contents.cid')
+                    ->where('table.metas.type = ?', 'tag')
+                    ->where('table.contents.type = ?', 'post')
+                    ->where('table.contents.status = ?', 'publish')
+                    ->group('table.metas.mid')
+                    ->order('posts', \Typecho\Db::SORT_DESC)
+                    ->limit(12)
+            );
+
+            foreach ($tagRows as $row) {
+                $name = trim((string) ($row['name'] ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+                $context['tags'][] = [
+                    'name' => $name,
+                    'slug' => trim((string) ($row['slug'] ?? '')),
+                    'posts' => (int) ($row['posts'] ?? 0),
+                ];
+            }
+        } catch (\Throwable $exception) {
+        }
+    }
+
+    return $context;
+}
+
+function classic22AiAllocRecentPosts(int $limit = 80)
+{
+    $rule = 'pageSize=' . max(1, $limit);
+
+    try {
+        if (class_exists('\\Widget\\Contents\\Post\\Recent')) {
+            \Widget\Contents\Post\Recent::alloc($rule)->to($recentPosts);
+            if (isset($recentPosts) && is_object($recentPosts)) {
+                return $recentPosts;
+            }
+        }
+    } catch (\Throwable $exception) {
+    }
+
+    try {
+        if (class_exists('\\Widget_Contents_Post_Recent')) {
+            \Widget_Contents_Post_Recent::alloc($rule)->to($recentPosts);
+            if (isset($recentPosts) && is_object($recentPosts)) {
+                return $recentPosts;
+            }
+        }
+    } catch (\Throwable $exception) {
+    }
+
+    return null;
+}
+
+function classic22AiEnabled($options): bool
+{
+    return classic22LinuxDoGetOption($options, 'aiEnabled', '1') !== '0';
+}
+
+function classic22AiGetModels($options): array
+{
+    $raw = classic22LinuxDoGetOption($options, 'aiModels', "gpt-4o-mini\ngpt-4.1-mini\ngpt-4o");
+    $lines = preg_split('/\r\n|\r|\n/', (string) $raw);
+
+    $models = [];
+    if (is_array($lines)) {
+        foreach ($lines as $line) {
+            $model = trim((string) $line);
+            if ($model === '') {
+                continue;
+            }
+
+            $models[] = $model;
+        }
+    }
+
+    if (empty($models)) {
+        return ['gpt-4o-mini'];
+    }
+
+    return array_values(array_unique($models));
+}
+
+function classic22AiDefaultModel($options): string
+{
+    $models = classic22AiGetModels($options);
+    $configured = trim((string) classic22LinuxDoGetOption($options, 'aiDefaultModel', ''));
+
+    if ($configured !== '' && in_array($configured, $models, true)) {
+        return $configured;
+    }
+
+    return (string) $models[0];
+}
+
+function classic22AiSystemPrompt($options): string
+{
+    $prompt = trim((string) classic22LinuxDoGetOption($options, 'aiSystemPrompt', ''));
+    if ($prompt !== '') {
+        return $prompt;
+    }
+
+    return '你是博客首页 AI 助手，请使用中文简洁回答用户问题。';
+}
+
+function classic22AiBuildArticleListPayload(\Widget\Archive $archive, int $limit = 80): array
+{
+    $items = [];
+
+    $recentPosts = classic22AiAllocRecentPosts($limit);
+    if (!is_object($recentPosts)) {
+        return [];
+    }
+
+    try {
+        while ($recentPosts->next()) {
+            try {
+                $cid = (int) ($recentPosts->cid ?? 0);
+                if ($cid <= 0) {
+                    continue;
+                }
+
+                $title = trim((string) ($recentPosts->title ?? ''));
+                if ($title === '') {
+                    $title = '文章 #' . $cid;
+                }
+
+                $date = '';
+                try {
+                    $date = trim((string) $recentPosts->date->format('Y-m-d'));
+                } catch (\Throwable $exception) {
+                    $date = '';
+                }
+
+                $excerpt = trim(postExcerptText($recentPosts, 220, '...'));
+
+                $commentsCount = 0;
+                try {
+                    $commentsCount = classic22AiNumericValue($recentPosts->commentsNum ?? 0);
+                } catch (\Throwable $exception) {
+                    $commentsCount = 0;
+                }
+
+                $items[] = [
+                    'id' => $cid,
+                    'title' => $title,
+                    'permalink' => trim((string) ($recentPosts->permalink ?? '')),
+                    'date' => $date,
+                    'excerpt' => $excerpt,
+                    'views' => classic22AiResolvePostViews($recentPosts),
+                    'comments' => $commentsCount,
+                ];
+            } catch (\Throwable $exception) {
+                continue;
+            }
+        }
+    } catch (\Throwable $exception) {
+        return [];
+    }
+
+    return $items;
+}
+
+function classic22AiLoadPostTextByCid(int $cid): string
+{
+    if ($cid <= 0) {
+        return '';
+    }
+
+    $db = classic22LinuxDoDb();
+    if (!is_object($db)) {
+        return '';
+    }
+
+    try {
+        $row = $db->fetchRow(
+            $db->select('text')
+                ->from('table.contents')
+                ->where('cid = ? AND status = ? AND type = ?', $cid, 'publish', 'post')
+                ->limit(1)
+        );
+    } catch (\Throwable $exception) {
+        return '';
+    }
+
+    if (is_array($row)) {
+        return trim((string) ($row['text'] ?? ''));
+    }
+
+    if (is_object($row)) {
+        return trim((string) ($row->text ?? ''));
+    }
+
+    return '';
+}
+
+function classic22AiFindArticleById(\Widget\Archive $archive, int $cid): ?array
+{
+    if ($cid <= 0) {
+        return null;
+    }
+
+    $recentPosts = classic22AiAllocRecentPosts(200);
+    if (!is_object($recentPosts)) {
+        return null;
+    }
+
+    try {
+        while ($recentPosts->next()) {
+            if ((int) ($recentPosts->cid ?? 0) !== $cid) {
+                continue;
+            }
+
+            $date = '';
+            try {
+                $date = trim((string) $recentPosts->date->format('Y-m-d'));
+            } catch (\Throwable $exception) {
+                $date = '';
+            }
+
+            $content = trim((string) ($recentPosts->content ?? ''));
+            if ($content === '') {
+                $content = classic22AiLoadPostTextByCid((int) ($recentPosts->cid ?? 0));
+            }
+
+            if ($content === '') {
+                $content = trim(postExcerptText($recentPosts, 360, '...'));
+            }
+
+            return [
+                'id' => (int) ($recentPosts->cid ?? 0),
+                'title' => trim((string) ($recentPosts->title ?? '')),
+                'permalink' => trim((string) ($recentPosts->permalink ?? '')),
+                'date' => $date,
+                'content' => $content,
+                'excerpt' => trim(postExcerptText($recentPosts, 360, '...')),
+                'views' => classic22AiResolvePostViews($recentPosts),
+                'comments' => classic22AiNumericValue($recentPosts->commentsNum ?? 0),
+            ];
+        }
+    } catch (\Throwable $exception) {
+        return null;
+    }
+
+    return null;
+}
+
+function classic22AiFindArticleByUrl(\Widget\Archive $archive, string $url): ?array
+{
+    $url = trim($url);
+    if ($url === '') {
+        return null;
+    }
+
+    $targetPath = (string) (parse_url($url, PHP_URL_PATH) ?? '');
+    if ($targetPath === '') {
+        return null;
+    }
+
+    $recentPosts = classic22AiAllocRecentPosts(200);
+    if (!is_object($recentPosts)) {
+        return null;
+    }
+
+    try {
+        while ($recentPosts->next()) {
+            $postPath = (string) (parse_url((string) ($recentPosts->permalink ?? ''), PHP_URL_PATH) ?? '');
+            if ($postPath !== $targetPath) {
+                continue;
+            }
+
+            return classic22AiFindArticleById($archive, (int) ($recentPosts->cid ?? 0));
+        }
+    } catch (\Throwable $exception) {
+        return null;
+    }
+
+    return null;
+}
+
+function classic22AiSendJson(array $payload, int $status = 200): void
+{
+    if (!headers_sent()) {
+        if (function_exists('http_response_code')) {
+            http_response_code($status);
+        }
+        header('Content-Type: application/json; charset=UTF-8');
+    }
+
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+function classic22AiNormalizeBaseUrl(string $baseUrl): string
+{
+    $trimmed = trim($baseUrl);
+    if ($trimmed === '') {
+        return 'https://api.openai.com/v1';
+    }
+
+    return rtrim($trimmed, '/');
+}
+
+function classic22AiSanitizeBaseUrl(string $baseUrl, string $provider): string
+{
+    $normalized = classic22AiNormalizeBaseUrl($baseUrl);
+
+    $normalized = preg_replace('#/(chat/completions|responses)$#i', '', $normalized);
+    if (!is_string($normalized)) {
+        $normalized = classic22AiNormalizeBaseUrl($baseUrl);
+    }
+
+    if ($provider !== 'rightcode') {
+        return $normalized;
+    }
+
+    $host = strtolower((string) (parse_url($normalized, PHP_URL_HOST) ?? ''));
+    $path = strtolower((string) (parse_url($normalized, PHP_URL_PATH) ?? ''));
+
+    if ($host === 'www.right.codes' || $host === 'right.codes') {
+        if ($path === '' || $path === '/' || $path === '/codex' || $path === '/codex/') {
+            return rtrim($normalized, '/') . '/v1';
+        }
+    }
+
+    return $normalized;
+}
+
+function classic22AiResolveApiMode($options): string
+{
+    $mode = strtolower(trim((string) classic22LinuxDoGetOption($options, 'aiApiMode', 'chat_completions')));
+    if (!in_array($mode, ['chat_completions', 'responses'], true)) {
+        $mode = 'chat_completions';
+    }
+
+    return $mode;
+}
+
+function classic22AiBuildChatCompletionsPayload(string $model, array $messages): ?string
+{
+    $payload = json_encode([
+        'model' => $model,
+        'messages' => $messages,
+        'temperature' => 0.7,
+        'stream' => false,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    if (!is_string($payload) || $payload === '') {
+        return null;
+    }
+
+    return $payload;
+}
+
+function classic22AiBuildResponsesInput(array $messages): array
+{
+    $userParts = [];
+
+    foreach ($messages as $message) {
+        if (!is_array($message)) {
+            continue;
+        }
+
+        $role = trim((string) ($message['role'] ?? 'user'));
+        $text = trim((string) ($message['content'] ?? ''));
+        if ($text === '') {
+            continue;
+        }
+
+        if ($role === 'user') {
+            $userParts[] = $text;
+        }
+    }
+
+    if (empty($userParts)) {
+        foreach ($messages as $message) {
+            if (!is_array($message)) {
+                continue;
+            }
+
+            $text = trim((string) ($message['content'] ?? ''));
+            if ($text !== '') {
+                $userParts[] = $text;
+            }
+        }
+    }
+
+    $userText = trim(implode("\n\n", $userParts));
+    if ($userText === '') {
+        $userText = '你好';
+    }
+
+    return [[
+        'type' => 'message',
+        'role' => 'user',
+        'content' => [[
+            'type' => 'input_text',
+            'text' => $userText,
+        ]],
+    ]];
+}
+
+function classic22AiBuildResponsesUserInput(array $messages): string
+{
+    $userParts = [];
+
+    foreach ($messages as $message) {
+        if (!is_array($message)) {
+            continue;
+        }
+
+        $role = trim((string) ($message['role'] ?? ''));
+        if ($role !== 'user') {
+            continue;
+        }
+
+        $text = trim((string) ($message['content'] ?? ''));
+        if ($text !== '') {
+            $userParts[] = $text;
+        }
+    }
+
+    if (empty($userParts)) {
+        foreach ($messages as $message) {
+            if (!is_array($message)) {
+                continue;
+            }
+
+            $text = trim((string) ($message['content'] ?? ''));
+            if ($text !== '') {
+                $userParts[] = $text;
+            }
+        }
+    }
+
+    $userText = trim(implode("\n\n", $userParts));
+    return $userText !== '' ? $userText : '你好';
+}
+
+function classic22AiBuildResponsesInstructions(array $messages): string
+{
+    $parts = [];
+
+    foreach ($messages as $message) {
+        if (!is_array($message)) {
+            continue;
+        }
+
+        $role = trim((string) ($message['role'] ?? ''));
+        if ($role !== 'system') {
+            continue;
+        }
+
+        $text = trim((string) ($message['content'] ?? ''));
+        if ($text !== '') {
+            $parts[] = $text;
+        }
+    }
+
+    return trim(implode("\n\n", $parts));
+}
+
+function classic22AiBuildResponsesPayload(string $model, array $messages): ?string
+{
+    $input = classic22AiBuildResponsesInput($messages);
+    $inputText = classic22AiBuildResponsesUserInput($messages);
+
+    $payloadArray = [
+        'model' => $model,
+        'input' => $inputText,
+        'stream' => false,
+    ];
+
+    $instructions = classic22AiBuildResponsesInstructions($messages);
+    if ($instructions !== '') {
+        $payloadArray['instructions'] = $instructions;
+    }
+
+    $payload = json_encode($payloadArray, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    if (!is_string($payload) || $payload === '') {
+        return null;
+    }
+
+    return $payload;
+}
+
+function classic22AiExtractTextFromResponsesOutput(array $decoded): string
+{
+    if (isset($decoded['output_text']) && is_string($decoded['output_text'])) {
+        $outputText = trim((string) $decoded['output_text']);
+        if ($outputText !== '') {
+            return $outputText;
+        }
+    }
+
+    $output = $decoded['output'] ?? null;
+    if (!is_array($output)) {
+        return '';
+    }
+
+    $texts = [];
+    foreach ($output as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $content = $item['content'] ?? null;
+        if (!is_array($content)) {
+            continue;
+        }
+
+        foreach ($content as $contentItem) {
+            if (!is_array($contentItem)) {
+                continue;
+            }
+
+            $text = trim((string) ($contentItem['text'] ?? ''));
+            if ($text !== '') {
+                $texts[] = $text;
+            }
+        }
+    }
+
+    return trim(implode("\n", $texts));
+}
+
+function classic22AiExtractAnswerByMode(array $decoded, string $mode): string
+{
+    if ($mode === 'responses') {
+        $text = classic22AiExtractTextFromResponsesOutput($decoded);
+        if ($text !== '') {
+            return $text;
+        }
+    }
+
+    return classic22AiExtractTextFromResponse($decoded);
+}
+
+function classic22AiRequest(string $apiUrl, string $payload, string $apiKey): array
+{
+    return classic22LinuxDoHttpRequest(
+        $apiUrl,
+        'POST',
+        $payload,
+        [
+            'Content-Type: application/json',
+            'Accept: application/json',
+            'Authorization: Bearer ' . $apiKey,
+            'x-api-key: ' . $apiKey,
+        ]
+    );
+}
+
+function classic22AiExtractRemoteErrorMessage(array $response): string
+{
+    $body = json_decode((string) ($response['body'] ?? ''), true);
+    if (is_array($body) && isset($body['error']) && is_array($body['error']) && isset($body['error']['message'])) {
+        return trim((string) $body['error']['message']);
+    }
+
+    if (is_array($body) && isset($body['message']) && is_string($body['message'])) {
+        return trim((string) $body['message']);
+    }
+
+    if (is_array($body) && isset($body['detail']) && is_string($body['detail'])) {
+        return trim((string) $body['detail']);
+    }
+
+    $error = trim((string) ($response['error'] ?? ''));
+    if ($error !== '') {
+        return $error;
+    }
+
+    $rawBody = trim((string) ($response['body'] ?? ''));
+    if ($rawBody !== '') {
+        $clean = trim(preg_replace('/\s+/u', ' ', strip_tags($rawBody)));
+        if ($clean !== '') {
+            return \Typecho\Common::subStr($clean, 0, 240, '...');
+        }
+    }
+
+    return '';
+}
+
+function classic22AiResponseBodyExcerpt(array $response, int $limit = 240): string
+{
+    $rawBody = trim((string) ($response['body'] ?? ''));
+    if ($rawBody === '') {
+        return '';
+    }
+
+    $clean = trim(preg_replace('/\s+/u', ' ', strip_tags($rawBody)));
+    if ($clean === '') {
+        return '';
+    }
+
+    return \Typecho\Common::subStr($clean, 0, $limit, '...');
+}
+
+function classic22AiBuildMessages($archive, string $prompt, string $question, ?array $article): array
+{
+    $context = classic22AiBuildSiteContext($archive);
+
+    $systemContent = $prompt;
+
+    $siteLines = [];
+    $siteLines[] = '站点文章数：' . (int) ($context['site']['posts'] ?? 0);
+    $siteLines[] = '站点评论数：' . (int) ($context['site']['comments'] ?? 0);
+    $siteLines[] = '分类数：' . (int) ($context['site']['categories'] ?? 0);
+    $systemContent .= "\n\n【站点概况】\n" . implode("\n", $siteLines);
+
+    if (!empty($context['topComments'])) {
+        $commentLines = [];
+        foreach ($context['topComments'] as $index => $item) {
+            $title = trim((string) ($item['title'] ?? ''));
+            if ($title === '') {
+                continue;
+            }
+            $commentLines[] = (string) ($index + 1)
+                . '. ' . $title
+                . '（评论 ' . (int) ($item['comments'] ?? 0)
+                . '，浏览 ' . (int) ($item['views'] ?? 0) . '）';
+        }
+        if (!empty($commentLines)) {
+            $systemContent .= "\n\n【文章评论排行】\n" . implode("\n", $commentLines);
+        }
+    }
+
+    if (!empty($context['topViews'])) {
+        $viewLines = [];
+        foreach ($context['topViews'] as $index => $item) {
+            $title = trim((string) ($item['title'] ?? ''));
+            if ($title === '') {
+                continue;
+            }
+            $viewLines[] = (string) ($index + 1)
+                . '. ' . $title
+                . '（浏览 ' . (int) ($item['views'] ?? 0)
+                . '，评论 ' . (int) ($item['comments'] ?? 0) . '）';
+        }
+        if (!empty($viewLines)) {
+            $systemContent .= "\n\n【文章浏览排行】\n" . implode("\n", $viewLines);
+        }
+    }
+
+    if (!empty($context['authors'])) {
+        $authorLines = [];
+        foreach ($context['authors'] as $item) {
+            $name = trim((string) ($item['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $authorLines[] = $name . '（文章 ' . (int) ($item['posts'] ?? 0) . '）';
+        }
+        if (!empty($authorLines)) {
+            $systemContent .= "\n\n【作者活跃度】\n" . implode('、', $authorLines);
+        }
+    }
+
+    if (!empty($context['categories'])) {
+        $categoryLines = [];
+        foreach ($context['categories'] as $item) {
+            $name = trim((string) ($item['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $categoryLines[] = $name . '（文章 ' . (int) ($item['posts'] ?? 0) . '）';
+        }
+        if (!empty($categoryLines)) {
+            $systemContent .= "\n\n【分类分布】\n" . implode('、', $categoryLines);
+        }
+    }
+
+    if (!empty($context['tags'])) {
+        $tagLines = [];
+        foreach ($context['tags'] as $item) {
+            $name = trim((string) ($item['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $tagLines[] = $name . '（文章 ' . (int) ($item['posts'] ?? 0) . '）';
+        }
+        if (!empty($tagLines)) {
+            $systemContent .= "\n\n【标签分布】\n" . implode('、', $tagLines);
+        }
+    }
+
+    if (!empty($context['recentPosts'])) {
+        $recentLines = [];
+        foreach ($context['recentPosts'] as $item) {
+            $title = trim((string) ($item['title'] ?? ''));
+            if ($title === '') {
+                continue;
+            }
+            $excerpt = trim((string) ($item['excerpt'] ?? ''));
+            $recentLines[] = $title
+                . '（' . trim((string) ($item['date'] ?? ''))
+                . '，评论 ' . (int) ($item['comments'] ?? 0)
+                . '，浏览 ' . (int) ($item['views'] ?? 0)
+                . '）摘要：' . $excerpt;
+        }
+        if (!empty($recentLines)) {
+            $systemContent .= "\n\n【近期文章摘要】\n" . implode("\n", $recentLines);
+        }
+    }
+
+    $messages = [
+        [
+            'role' => 'system',
+            'content' => $systemContent,
+        ],
+    ];
+
+    if (is_array($article) && !empty($article['title'])) {
+        $articleContext = "【文章信息】\n"
+            . '标题：' . (string) ($article['title'] ?? '') . "\n"
+            . '链接：' . (string) ($article['permalink'] ?? '') . "\n"
+            . '发布日期：' . (string) ($article['date'] ?? '') . "\n"
+            . '浏览量：' . (int) ($article['views'] ?? 0) . "\n"
+            . '评论数：' . (int) ($article['comments'] ?? 0) . "\n"
+            . "【文章内容】\n"
+            . trim(strip_tags((string) ($article['content'] ?? $article['excerpt'] ?? '')));
+
+        $messages[] = [
+            'role' => 'system',
+            'content' => $articleContext,
+        ];
+    }
+
+    $messages[] = [
+        'role' => 'user',
+        'content' => $question,
+    ];
+
+    return $messages;
+}
+
+function classic22AiExtractTextFromResponse(array $decoded): string
+{
+    $choices = $decoded['choices'] ?? null;
+    if (!is_array($choices) || empty($choices[0]) || !is_array($choices[0])) {
+        return '';
+    }
+
+    $first = $choices[0];
+    $message = $first['message'] ?? null;
+
+    if (is_array($message) && isset($message['content'])) {
+        $content = $message['content'];
+        if (is_string($content)) {
+            return trim($content);
+        }
+
+        if (is_array($content)) {
+            $parts = [];
+            foreach ($content as $part) {
+                if (is_array($part) && isset($part['text']) && is_string($part['text'])) {
+                    $parts[] = $part['text'];
+                }
+            }
+            return trim(implode("\n", $parts));
+        }
+    }
+
+    if (isset($first['text']) && is_string($first['text'])) {
+        return trim($first['text']);
+    }
+
+    return '';
+}
+
+function classic22AiNormalizeRemoteError(string $message): string
+{
+    $normalized = trim($message);
+    if ($normalized === '') {
+        return 'AI 服务暂不可用，请稍后重试。';
+    }
+
+    $lower = strtolower($normalized);
+
+    if (
+        strpos($lower, 'country, region, or territory not supported') !== false
+        || strpos($lower, 'unsupported_country_region_territory') !== false
+        || strpos($lower, 'region is not supported') !== false
+    ) {
+        return '当前地区不可使用该 AI 服务。请到主题设置将「AI 接口地址」改为可用的 OpenAI 兼容服务，并更换对应 API Key。';
+    }
+
+    return $normalized;
+}
+
+function classic22AiIsRegionBlockedError(string $message): bool
+{
+    $lower = strtolower(trim($message));
+    if ($lower === '') {
+        return false;
+    }
+
+    return strpos($lower, 'country, region, or territory not supported') !== false
+        || strpos($lower, 'unsupported_country_region_territory') !== false
+        || strpos($lower, 'region is not supported') !== false;
+}
+
+function classic22AiHandleRequest($archive): void
+{
+    if (!is_object($archive) || !isset($archive->request)) {
+        return;
+    }
+
+    $action = trim((string) $archive->request->get('classic22_ai'));
+    if ($action === '') {
+        return;
+    }
+
+    if (!classic22AiEnabled($archive->options)) {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => '首页 AI 对话未开启。',
+        ], 403);
+    }
+
+    if ($action === 'articles') {
+        classic22AiSendJson([
+            'ok' => true,
+            'items' => classic22AiBuildArticleListPayload($archive),
+        ]);
+    }
+
+    if ($action !== 'chat') {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => '无效请求。',
+        ], 400);
+    }
+
+    $rawBody = '';
+    try {
+        $rawBody = (string) file_get_contents('php://input');
+    } catch (\Throwable $exception) {
+        $rawBody = '';
+    }
+
+    $data = json_decode($rawBody, true);
+    if (!is_array($data)) {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => '请求参数错误。',
+        ], 400);
+    }
+
+    $question = trim((string) ($data['message'] ?? ''));
+    if ($question === '') {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => '请输入问题内容。',
+        ], 400);
+    }
+
+    $allowedModels = classic22AiGetModels($archive->options);
+    $requestedModel = trim((string) ($data['model'] ?? ''));
+
+    if ($requestedModel === '') {
+        $model = classic22AiDefaultModel($archive->options);
+    } elseif (in_array($requestedModel, $allowedModels, true)) {
+        $model = $requestedModel;
+    } elseif (preg_match('/^[a-zA-Z0-9._:-]{2,120}$/', $requestedModel)) {
+        $model = $requestedModel;
+    } else {
+        $model = classic22AiDefaultModel($archive->options);
+    }
+
+    $selectedArticleId = (int) ($data['articleId'] ?? 0);
+    $selectedArticleUrl = trim((string) ($data['articleUrl'] ?? ''));
+
+    $article = null;
+    if ($selectedArticleId > 0) {
+        $article = classic22AiFindArticleById($archive, $selectedArticleId);
+    }
+
+    if ($article === null && $selectedArticleUrl !== '') {
+        $article = classic22AiFindArticleByUrl($archive, $selectedArticleUrl);
+    }
+
+    $configuredProvider = strtolower(trim((string) classic22LinuxDoGetOption($archive->options, 'aiProvider', 'openai')));
+    $provider = $configuredProvider;
+    if (!in_array($provider, ['openai', 'rightcode'], true)) {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => '当前 AI 接口类型不受支持。',
+        ], 400);
+    }
+
+    $apiKey = trim((string) classic22LinuxDoGetOption($archive->options, 'aiApiKey', ''));
+    if ($apiKey === '') {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => '请先在主题设置中配置 AI API Key。',
+        ], 500);
+    }
+
+    $configuredBaseUrl = classic22LinuxDoGetOption($archive->options, 'aiApiBaseUrl', 'https://api.openai.com/v1');
+    $baseUrl = classic22AiSanitizeBaseUrl((string) $configuredBaseUrl, $provider);
+
+    if ($provider === 'rightcode') {
+        $baseLower = strtolower($baseUrl);
+        if ($baseLower === '' || strpos($baseLower, 'api.openai.com') !== false) {
+            $baseUrl = 'https://www.right.codes/codex/v1';
+        }
+    }
+
+    $configuredMode = classic22AiResolveApiMode($archive->options);
+    $mode = $configuredMode;
+
+    if ($provider === 'rightcode' && $mode !== 'responses') {
+        $mode = 'responses';
+    }
+
+    $apiUrl = $baseUrl . ($mode === 'responses' ? '/responses' : '/chat/completions');
+
+    $messages = classic22AiBuildMessages($archive, classic22AiSystemPrompt($archive->options), $question, $article);
+
+    $payload = $mode === 'responses'
+        ? classic22AiBuildResponsesPayload($model, $messages)
+        : classic22AiBuildChatCompletionsPayload($model, $messages);
+
+    if (!is_string($payload) || trim($payload) === '') {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => '请求构造失败。',
+        ], 500);
+    }
+
+    $response = classic22AiRequest($apiUrl, $payload, $apiKey);
+
+    $fallbackTried = false;
+    $fallbackUsed = false;
+    $fallbackInfo = null;
+
+    if (empty($response['ok']) && $provider === 'openai') {
+        $rawRemoteError = classic22AiExtractRemoteErrorMessage($response);
+        if (classic22AiIsRegionBlockedError($rawRemoteError)) {
+            $fallbackTried = true;
+            $fallbackProvider = 'rightcode';
+            $fallbackMode = 'responses';
+            $fallbackBaseUrl = classic22AiSanitizeBaseUrl((string) $configuredBaseUrl, $fallbackProvider);
+            $fallbackBaseLower = strtolower($fallbackBaseUrl);
+            if ($fallbackBaseLower === '' || strpos($fallbackBaseLower, 'api.openai.com') !== false) {
+                $fallbackBaseUrl = 'https://www.right.codes/codex/v1';
+            }
+
+            $fallbackApiUrl = $fallbackBaseUrl . '/responses';
+            $fallbackPayload = classic22AiBuildResponsesPayload($model, $messages);
+
+            if (is_string($fallbackPayload) && trim($fallbackPayload) !== '') {
+                $fallbackResponse = classic22AiRequest($fallbackApiUrl, $fallbackPayload, $apiKey);
+                $fallbackInfo = [
+                    'provider' => $fallbackProvider,
+                    'mode' => $fallbackMode,
+                    'apiUrl' => $fallbackApiUrl,
+                    'httpStatus' => (int) ($fallbackResponse['status'] ?? 0),
+                    'error' => classic22AiExtractRemoteErrorMessage($fallbackResponse),
+                    'bodyExcerpt' => classic22AiResponseBodyExcerpt($fallbackResponse),
+                ];
+
+                if (empty($fallbackResponse['ok'])) {
+                    $fallbackCompatApiUrl = $fallbackBaseUrl . '/chat/completions';
+                    $fallbackCompatPayload = classic22AiBuildChatCompletionsPayload($model, $messages);
+                    if (is_string($fallbackCompatPayload) && trim($fallbackCompatPayload) !== '') {
+                        $fallbackCompatResponse = classic22AiRequest($fallbackCompatApiUrl, $fallbackCompatPayload, $apiKey);
+                        $fallbackInfo['compat'] = [
+                            'provider' => $fallbackProvider,
+                            'mode' => 'chat_completions',
+                            'apiUrl' => $fallbackCompatApiUrl,
+                            'httpStatus' => (int) ($fallbackCompatResponse['status'] ?? 0),
+                            'error' => classic22AiExtractRemoteErrorMessage($fallbackCompatResponse),
+                            'bodyExcerpt' => classic22AiResponseBodyExcerpt($fallbackCompatResponse),
+                        ];
+
+                        if (!empty($fallbackCompatResponse['ok'])) {
+                            $provider = $fallbackProvider;
+                            $mode = 'chat_completions';
+                            $baseUrl = $fallbackBaseUrl;
+                            $apiUrl = $fallbackCompatApiUrl;
+                            $payload = $fallbackCompatPayload;
+                            $response = $fallbackCompatResponse;
+                            $fallbackUsed = true;
+                        }
+                    }
+                }
+
+                if (!empty($fallbackResponse['ok'])) {
+                    $provider = $fallbackProvider;
+                    $mode = $fallbackMode;
+                    $baseUrl = $fallbackBaseUrl;
+                    $apiUrl = $fallbackApiUrl;
+                    $payload = $fallbackPayload;
+                    $response = $fallbackResponse;
+                    $fallbackUsed = true;
+                }
+            }
+        }
+    }
+
+    if (empty($response['ok'])) {
+        $message = '';
+        $status = 502;
+        $rawRemoteError = classic22AiExtractRemoteErrorMessage($response);
+        if ($rawRemoteError !== '') {
+            $message = classic22AiNormalizeRemoteError($rawRemoteError);
+            if (classic22AiIsRegionBlockedError($rawRemoteError)) {
+                $status = 403;
+            }
+        } else {
+            $message = 'AI 服务暂不可用，请稍后重试。';
+        }
+
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => $message,
+        ], $status);
+    }
+
+    $decoded = json_decode((string) ($response['body'] ?? ''), true);
+    if (!is_array($decoded)) {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => 'AI 返回格式错误。',
+        ], 502);
+    }
+
+    $answer = classic22AiExtractAnswerByMode($decoded, $mode);
+    if ($answer === '') {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => $mode === 'responses'
+                ? 'AI 未返回可用内容（responses）。请在主题设置中检查接口地址是否正确，例如 https://www.right.codes/codex/v1。'
+                : 'AI 未返回可用内容。',
+        ], 502);
+    }
+
+    classic22AiSendJson([
+        'ok' => true,
+        'answer' => $answer,
+        'model' => $model,
+    ]);
 }
 
 function classic22ParseHomeAnnouncements(?string $raw): array

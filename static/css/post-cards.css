@@ -30,6 +30,409 @@ main.container-fluid {
   box-shadow: none;
 }
 
+.classic22-home-ai-wrap {
+  display: flex;
+  flex-direction: column;
+  width: 50%;
+  max-width: 95%;
+  margin: 0 auto 2.5rem;
+}
+
+.classic22-home-ai-panel {
+  --classic22-ai-control-height: 2.1rem;
+  --classic22-ai-select-width: 6.1rem;
+  --classic22-ai-send-width: 4.35rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-card-background-color, var(--pico-background-color));
+  padding: 0.95rem 1rem 0.72rem;
+  transition: none;
+}
+
+.classic22-home-ai-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.classic22-home-ai-input-wrap {
+  display: block;
+  margin: 0;
+}
+
+.classic22-home-ai-input-wrap textarea {
+  margin: 0;
+  min-height: 4.4rem;
+  max-height: 16rem;
+  border-radius: calc(var(--pico-border-radius) - 0.05rem);
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  font-size: 1rem;
+  line-height: 1.35;
+  color: var(--pico-color);
+  resize: none;
+}
+
+.classic22-home-ai-input-wrap textarea::placeholder {
+  color: color-mix(in srgb, var(--pico-color) 46%, transparent);
+  font-size: 0.86rem;
+}
+
+.classic22-home-ai-input-wrap textarea:focus,
+.classic22-home-ai-input-wrap textarea:focus-visible,
+.classic22-home-ai-input-wrap textarea:active {
+  outline: none;
+  box-shadow: none;
+}
+
+.classic22-home-ai-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.38rem;
+  margin: 0;
+  flex-wrap: nowrap;
+}
+
+.classic22-home-ai-actions label,
+.classic22-home-ai-actions button {
+  margin: 0;
+}
+
+.classic22-home-ai-actions-left,
+.classic22-home-ai-actions-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.classic22-home-ai-actions-right {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.classic22-home-ai-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  height: var(--classic22-ai-control-height);
+  min-height: var(--classic22-ai-control-height);
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 0.52rem;
+  padding: 0 1.55rem 0 0.46rem;
+  background: transparent;
+  color: var(--pico-muted-color);
+  box-sizing: border-box;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.classic22-home-ai-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.88rem;
+  height: 0.88rem;
+  color: currentColor;
+}
+
+.classic22-home-ai-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.classic22-home-ai-caret {
+  position: absolute;
+  right: 0.42rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.78rem;
+  height: 0.78rem;
+  color: currentColor;
+  pointer-events: none;
+}
+
+.classic22-home-ai-caret svg {
+  width: 100%;
+  height: 100%;
+  display: none;
+}
+
+.classic22-home-ai-caret .classic22-home-ai-caret-right {
+  display: block;
+}
+
+.classic22-home-ai-select.is-open .classic22-home-ai-caret-right,
+.classic22-home-ai-select:focus-within .classic22-home-ai-caret-right {
+  display: none;
+}
+
+.classic22-home-ai-select.is-open .classic22-home-ai-caret-down,
+.classic22-home-ai-select:focus-within .classic22-home-ai-caret-down {
+  display: block;
+}
+
+.classic22-home-ai-select select {
+  margin: 0;
+  min-width: 0;
+  width: var(--classic22-ai-select-width);
+  max-width: var(--classic22-ai-select-width);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--pico-color);
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  font-size: 0.84rem;
+  line-height: 1.2;
+  height: 100%;
+  text-align: center;
+  text-align-last: center;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.classic22-home-ai-select select option {
+  text-align: center;
+}
+
+.classic22-home-ai-select select:focus,
+.classic22-home-ai-select select:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.classic22-home-ai-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  height: var(--classic22-ai-control-height);
+  min-height: var(--classic22-ai-control-height);
+  border: 0;
+  border-left: 0;
+  border-radius: 0;
+  padding: 0 0.42rem;
+  background: transparent;
+  color: var(--pico-muted-color);
+  font-size: 0.86rem;
+  line-height: 1;
+  box-sizing: border-box;
+  min-width: var(--classic22-ai-send-width);
+  flex: 0 0 var(--classic22-ai-send-width);
+  white-space: nowrap;
+}
+
+.classic22-home-ai-send:hover,
+.classic22-home-ai-send:focus,
+.classic22-home-ai-send:focus-visible,
+.classic22-home-ai-send:active {
+  background: transparent;
+  color: var(--pico-primary);
+  border-color: var(--pico-muted-border-color);
+  box-shadow: none;
+}
+
+.classic22-home-ai-chat-top {
+  margin-bottom: 0.6rem;
+}
+
+.classic22-home-ai-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--pico-muted-color);
+  font-size: 0.92rem;
+}
+
+.classic22-home-ai-back:hover,
+.classic22-home-ai-back:focus,
+.classic22-home-ai-back:focus-visible,
+.classic22-home-ai-back:active {
+  color: var(--pico-primary);
+  box-shadow: none;
+  outline: none;
+}
+
+.classic22-home-ai-chat-list {
+  margin: 0 0 0.8rem;
+  padding: 0;
+  min-height: 0;
+}
+
+.classic22-home-ai-message {
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 0.65rem;
+  padding: 0.72rem 0.82rem;
+  margin-bottom: 0.7rem;
+  line-height: 1.6;
+  font-size: 0.95rem;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.classic22-home-ai-message p,
+.classic22-home-ai-message ul,
+.classic22-home-ai-message ol,
+.classic22-home-ai-message pre,
+.classic22-home-ai-message blockquote,
+.classic22-home-ai-message h1,
+.classic22-home-ai-message h2,
+.classic22-home-ai-message h3,
+.classic22-home-ai-message h4,
+.classic22-home-ai-message h5,
+.classic22-home-ai-message h6 {
+  margin: 0 0 0.58rem;
+}
+
+.classic22-home-ai-message p:last-child,
+.classic22-home-ai-message ul:last-child,
+.classic22-home-ai-message ol:last-child,
+.classic22-home-ai-message pre:last-child,
+.classic22-home-ai-message blockquote:last-child,
+.classic22-home-ai-message h1:last-child,
+.classic22-home-ai-message h2:last-child,
+.classic22-home-ai-message h3:last-child,
+.classic22-home-ai-message h4:last-child,
+.classic22-home-ai-message h5:last-child,
+.classic22-home-ai-message h6:last-child {
+  margin-bottom: 0;
+}
+
+.classic22-home-ai-message pre {
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 0.48rem;
+  padding: 0.56rem 0.62rem;
+  overflow: auto;
+  background: color-mix(in srgb, var(--pico-muted-border-color) 20%, transparent);
+}
+
+.classic22-home-ai-message code {
+  font-size: 0.86em;
+}
+
+.classic22-home-ai-message p code,
+.classic22-home-ai-message li code,
+.classic22-home-ai-message blockquote code {
+  border-radius: 0.28rem;
+  padding: 0.04rem 0.24rem;
+  background: color-mix(in srgb, var(--pico-muted-border-color) 32%, transparent);
+}
+
+.classic22-home-ai-message blockquote {
+  border-left: 2px solid var(--pico-muted-border-color);
+  padding-left: 0.56rem;
+  color: var(--pico-muted-color);
+}
+
+.classic22-home-ai-message:last-child {
+  margin-bottom: 0;
+}
+
+.classic22-home-ai-message--user {
+  background: color-mix(in srgb, var(--pico-primary) 10%, transparent);
+}
+
+.classic22-home-ai-message--assistant {
+  background: transparent;
+}
+
+.classic22-home-ai-message--error {
+  border-color: color-mix(in srgb, #dc2626 30%, var(--pico-muted-border-color));
+  color: #b91c1c;
+}
+
+.classic22-home-ai-wrap.is-chat-mode {
+  margin-bottom: 0;
+}
+
+.classic22-home-ai-wrap.is-chat-mode .classic22-home-ai-panel {
+  position: sticky;
+  bottom: 0.5rem;
+  z-index: 20;
+}
+
+.classic22-home-layout.is-ai-chatting .classic22-home-post-list {
+  display: none;
+}
+
+@media (max-width: 1400px) {
+  .classic22-home-ai-wrap {
+    width: 60%;
+  }
+}
+
+@media (max-width: 1200px) {
+  .classic22-home-ai-wrap {
+    width: 70%;
+  }
+}
+
+@media (max-width: 992px) {
+  .classic22-home-ai-wrap {
+    width: 82%;
+  }
+}
+
+@media (max-width: 768px) {
+  .classic22-home-ai-wrap {
+    width: 95%;
+  }
+
+  .classic22-home-ai-actions {
+    flex-wrap: nowrap;
+    gap: 0.28rem;
+  }
+
+  .classic22-home-ai-actions-right {
+    width: auto;
+    justify-content: flex-end;
+    margin-left: auto;
+  }
+
+  .classic22-home-ai-select select {
+    width: clamp(3.45rem, 20vw, 4.6rem);
+    max-width: clamp(3.45rem, 20vw, 4.6rem);
+  }
+
+  .classic22-home-ai-input-wrap textarea {
+    min-height: 4rem;
+    font-size: 0.95rem;
+  }
+
+  .classic22-home-ai-input-wrap textarea::placeholder {
+    font-size: 0.82rem;
+  }
+
+  .classic22-home-ai-send {
+    min-width: 3.95rem;
+    flex-basis: 3.95rem;
+    padding: 0 0.36rem;
+    font-size: 0.8rem;
+  }
+
+  .classic22-home-ai-icon {
+    width: 0.8rem;
+    height: 0.8rem;
+  }
+}
+
 @media (max-width: 1400px) {
   .post-card {
     width: 60%;
