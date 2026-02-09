@@ -316,6 +316,15 @@ HTML;
     );
     $form->addInput($aiEnabled);
 
+    $aiAllowedDomains = new \Typecho\Widget\Helper\Form\Element\Textarea(
+        'aiAllowedDomains',
+        null,
+        '',
+        _t('AI 允许域名（可选）'),
+        _t('限制 AI 接口仅允许这些域名页面调用。每行一个域名（如 craft.hansjack.com）；留空时默认仅允许当前站点域名。')
+    );
+    $form->addInput($aiAllowedDomains);
+
     $aiProvider = new \Typecho\Widget\Helper\Form\Element\Select(
         'aiProvider',
         [
@@ -532,6 +541,7 @@ function classic22LinuxDoExtractSettingsFromRequest(): array
         'liveWsEnabled',
         'liveWsEndpoint',
         'aiEnabled',
+        'aiAllowedDomains',
         'aiProvider',
         'aiApiMode',
         'aiApiBaseUrl',
@@ -1844,6 +1854,98 @@ function classic22AiEnabled($options): bool
     return classic22LinuxDoGetOption($options, 'aiEnabled', '1') !== '0';
 }
 
+function classic22AiAllowedDomains($options): array
+{
+    $configured = trim((string) classic22LinuxDoGetOption($options, 'aiAllowedDomains', ''));
+    $domains = [];
+
+    if ($configured !== '') {
+        $lines = preg_split('/\r\n|\r|\n/', $configured);
+        if (is_array($lines)) {
+            foreach ($lines as $line) {
+                $domain = strtolower(trim((string) $line));
+                $domain = preg_replace('/^https?:\/\//i', '', $domain);
+                $domain = trim((string) $domain, " \t\n\r\0\x0B/");
+                if ($domain === '') {
+                    continue;
+                }
+
+                $domain = explode('/', $domain)[0] ?? '';
+                $domain = strtolower(trim((string) $domain));
+                if ($domain === '') {
+                    continue;
+                }
+
+                $domains[] = $domain;
+            }
+        }
+    }
+
+    if (empty($domains)) {
+        $siteBase = classic22LinuxDoSiteBaseUrl($options);
+        $siteHost = strtolower(trim((string) (parse_url($siteBase, PHP_URL_HOST) ?? '')));
+        if ($siteHost !== '') {
+            $domains[] = $siteHost;
+        }
+    }
+
+    return array_values(array_unique($domains));
+}
+
+function classic22AiExtractOriginHost(): string
+{
+    $origin = trim((string) ($_SERVER['HTTP_ORIGIN'] ?? ''));
+    if ($origin !== '') {
+        $originHost = strtolower(trim((string) (parse_url($origin, PHP_URL_HOST) ?? '')));
+        if ($originHost !== '') {
+            return $originHost;
+        }
+    }
+
+    $referer = trim((string) ($_SERVER['HTTP_REFERER'] ?? ''));
+    if ($referer !== '') {
+        $refererHost = strtolower(trim((string) (parse_url($referer, PHP_URL_HOST) ?? '')));
+        if ($refererHost !== '') {
+            return $refererHost;
+        }
+    }
+
+    return '';
+}
+
+function classic22AiIsAllowedDomainRequest($options): bool
+{
+    $allowedDomains = classic22AiAllowedDomains($options);
+    if (empty($allowedDomains)) {
+        return false;
+    }
+
+    $originHost = classic22AiExtractOriginHost();
+    if ($originHost === '') {
+        return false;
+    }
+
+    foreach ($allowedDomains as $allowed) {
+        $allowed = strtolower(trim((string) $allowed));
+        if ($allowed === '') {
+            continue;
+        }
+
+        if ($originHost === $allowed) {
+            return true;
+        }
+
+        if (strpos($allowed, '*.') === 0) {
+            $baseDomain = substr($allowed, 2);
+            if ($baseDomain !== '' && substr($originHost, -strlen('.' . $baseDomain)) === '.' . $baseDomain) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 function classic22AiGetModels($options): array
 {
     $raw = classic22LinuxDoGetOption($options, 'aiModels', "gpt-4o-mini\ngpt-4.1-mini\ngpt-4o");
@@ -2624,6 +2726,13 @@ function classic22AiHandleRequest($archive): void
         classic22AiSendJson([
             'ok' => false,
             'message' => '首页 AI 对话未开启。',
+        ], 403);
+    }
+
+    if (!classic22AiIsAllowedDomainRequest($archive->options)) {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => '当前域名未被允许使用 AI 对话。请在主题设置中检查「AI 允许域名」。',
         ], 403);
     }
 
