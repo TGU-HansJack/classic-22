@@ -24,6 +24,18 @@ $classic22AiChatUrl = $classic22AiEnabled
 $classic22AiArticlesApiUrl = $classic22AiEnabled
     ? $classic22AiBaseUrl . '?classic22_ai=articles'
     : '';
+$classic22TimelineData = function_exists('classic22TimelineHomeData') ? classic22TimelineHomeData($this) : [
+    'generatedAt' => 0,
+    'updatedAt' => '',
+    'timeline' => [],
+    'rankings' => ['views' => [], 'comments' => []],
+];
+$classic22TimelineItems = is_array($classic22TimelineData['timeline'] ?? null) ? $classic22TimelineData['timeline'] : [];
+$classic22TimelineItems = array_slice($classic22TimelineItems, 0, 5);
+$classic22TimelineRankings = is_array($classic22TimelineData['rankings'] ?? null) ? $classic22TimelineData['rankings'] : ['views' => [], 'comments' => []];
+$classic22TimelineViewRanks = is_array($classic22TimelineRankings['views'] ?? null) ? $classic22TimelineRankings['views'] : [];
+$classic22TimelineCommentRanks = is_array($classic22TimelineRankings['comments'] ?? null) ? $classic22TimelineRankings['comments'] : [];
+$classic22TimelineUpdatedAt = trim((string) ($classic22TimelineData['updatedAt'] ?? ''));
 ?>
 
 <main class="container-fluid">
@@ -112,42 +124,147 @@ $classic22AiArticlesApiUrl = $classic22AiEnabled
             </section>
         <?php endif; ?>
 
-        <section class="classic22-home-post-list" data-home-post-list>
-            <div class="post-cards">
-                <?php while ($this->next()): ?>
-                    <?php $cover = postCoverUrl($this); ?>
+        <aside class="classic22-home-sidebar" aria-label="首页侧边栏">
+            <section class="classic22-home-sidebar-card classic22-home-timeline-card" aria-label="站点动态时间线">
+                <h3 class="classic22-home-sidebar-title">站点动态时间线</h3>
+                <?php if ($classic22TimelineUpdatedAt !== ''): ?>
+                    <p class="classic22-home-sidebar-meta">更新于 <?php echo htmlspecialchars($classic22TimelineUpdatedAt, ENT_QUOTES, $this->options->charset); ?></p>
+                <?php endif; ?>
 
-                    <article class="post post-card" itemscope itemtype="http://schema.org/BlogPosting">
-                        <?php if ($cover): ?>
-                            <a class="post-card-cover" href="<?php $this->permalink(); ?>">
-                                <img
-                                    src="<?php echo htmlspecialchars($cover, ENT_QUOTES, $this->options->charset); ?>"
-                                    alt="<?php $this->title(); ?>"
-                                    loading="lazy"
-                                    itemprop="image"
-                                >
-                            </a>
-                        <?php endif; ?>
+                <ol class="classic22-home-timeline-list">
+                    <?php if (!empty($classic22TimelineItems)): ?>
+                        <?php foreach ($classic22TimelineItems as $item): ?>
+                            <?php
+                                $timelineTitle = trim((string) ($item['title'] ?? '动态更新'));
+                                $timelineSummary = trim((string) ($item['summary'] ?? ''));
+                                $timelineRelative = trim((string) ($item['relativeTime'] ?? ''));
+                                $timelineLink = trim((string) ($item['link'] ?? ''));
+                            ?>
+                            <li class="classic22-home-timeline-item">
+                                <div class="classic22-home-timeline-dot" aria-hidden="true"></div>
+                                <div class="classic22-home-timeline-content">
+                                    <?php if ($timelineRelative !== ''): ?>
+                                        <p class="classic22-home-timeline-time"><?php echo htmlspecialchars($timelineRelative, ENT_QUOTES, $this->options->charset); ?></p>
+                                    <?php endif; ?>
 
-                        <div class="post-card-inner">
-                            <?php postMeta($this, 'card'); ?>
+                                    <?php if ($timelineLink !== ''): ?>
+                                        <a class="classic22-home-timeline-title" href="<?php echo htmlspecialchars($timelineLink, ENT_QUOTES, $this->options->charset); ?>"><?php echo htmlspecialchars($timelineTitle, ENT_QUOTES, $this->options->charset); ?></a>
+                                    <?php else: ?>
+                                        <p class="classic22-home-timeline-title"><?php echo htmlspecialchars($timelineTitle, ENT_QUOTES, $this->options->charset); ?></p>
+                                    <?php endif; ?>
 
-                            <div class="entry-content fmt">
-                                <p class="post-card-excerpt text-muted" itemprop="description">
-                                    <?php echo htmlspecialchars(postExcerptText($this, 160), ENT_QUOTES, $this->options->charset); ?>
-                                </p>
-                                <p class="more">
-                                    <a href="<?php $this->permalink(); ?>" title="<?php $this->title(); ?>">
-                                        <?php _e('阅读全文'); ?>
-                                    </a>
-                                </p>
+                                    <?php if ($timelineSummary !== ''): ?>
+                                        <p class="classic22-home-timeline-summary"><?php echo htmlspecialchars($timelineSummary, ENT_QUOTES, $this->options->charset); ?></p>
+                                    <?php endif; ?>
+                                </div>
+                            </li>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <li class="classic22-home-timeline-item is-empty">
+                            <div class="classic22-home-timeline-dot" aria-hidden="true"></div>
+                            <div class="classic22-home-timeline-content">
+                                <p class="classic22-home-timeline-time">暂无数据</p>
+                                <p class="classic22-home-timeline-summary">时间线将在有新文章、评论或榜单变动时自动更新。</p>
                             </div>
-                        </div>
-                    </article>
-                <?php endwhile; ?>
-            </div>
+                        </li>
+                    <?php endif; ?>
+                </ol>
+            </section>
 
-            <nav><?php $this->pageNav(_t('前一页'), _t('后一页'), 2, '...', array('wrapTag' => 'ul', 'itemTag' => 'li')); ?></nav>
+            <section class="classic22-home-sidebar-card classic22-home-rank-card" aria-label="浏览量排行榜">
+                <h3 class="classic22-home-sidebar-title">浏览量排行榜</h3>
+                <ol class="classic22-home-rank-list">
+                    <?php if (!empty($classic22TimelineViewRanks)): ?>
+                        <?php foreach ($classic22TimelineViewRanks as $index => $item): ?>
+                            <?php
+                                $rankTitle = trim((string) ($item['title'] ?? '未命名文章'));
+                                $rankCount = (int) ($item['count'] ?? 0);
+                                $rankLink = trim((string) ($item['permalink'] ?? ''));
+                            ?>
+                            <li class="classic22-home-rank-item">
+                                <span class="classic22-home-rank-no"><?php echo (int) ($index + 1); ?></span>
+                                <?php if ($rankLink !== ''): ?>
+                                    <a class="classic22-home-rank-title" href="<?php echo htmlspecialchars($rankLink, ENT_QUOTES, $this->options->charset); ?>"><?php echo htmlspecialchars($rankTitle, ENT_QUOTES, $this->options->charset); ?></a>
+                                <?php else: ?>
+                                    <span class="classic22-home-rank-title"><?php echo htmlspecialchars($rankTitle, ENT_QUOTES, $this->options->charset); ?></span>
+                                <?php endif; ?>
+                                <span class="classic22-home-rank-count"><?php echo number_format($rankCount); ?></span>
+                            </li>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <li class="classic22-home-rank-item is-empty"><span class="classic22-home-rank-title">暂无数据</span></li>
+                    <?php endif; ?>
+                </ol>
+            </section>
+
+            <section class="classic22-home-sidebar-card classic22-home-rank-card" aria-label="评论排行榜">
+                <h3 class="classic22-home-sidebar-title">评论排行榜</h3>
+                <ol class="classic22-home-rank-list">
+                    <?php if (!empty($classic22TimelineCommentRanks)): ?>
+                        <?php foreach ($classic22TimelineCommentRanks as $index => $item): ?>
+                            <?php
+                                $rankTitle = trim((string) ($item['title'] ?? '未命名文章'));
+                                $rankCount = (int) ($item['count'] ?? 0);
+                                $rankLink = trim((string) ($item['permalink'] ?? ''));
+                            ?>
+                            <li class="classic22-home-rank-item">
+                                <span class="classic22-home-rank-no"><?php echo (int) ($index + 1); ?></span>
+                                <?php if ($rankLink !== ''): ?>
+                                    <a class="classic22-home-rank-title" href="<?php echo htmlspecialchars($rankLink, ENT_QUOTES, $this->options->charset); ?>"><?php echo htmlspecialchars($rankTitle, ENT_QUOTES, $this->options->charset); ?></a>
+                                <?php else: ?>
+                                    <span class="classic22-home-rank-title"><?php echo htmlspecialchars($rankTitle, ENT_QUOTES, $this->options->charset); ?></span>
+                                <?php endif; ?>
+                                <span class="classic22-home-rank-count"><?php echo number_format($rankCount); ?></span>
+                            </li>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <li class="classic22-home-rank-item is-empty"><span class="classic22-home-rank-title">暂无数据</span></li>
+                    <?php endif; ?>
+                </ol>
+            </section>
+        </aside>
+
+        <section class="classic22-home-post-list" data-home-post-list>
+            <div class="classic22-home-main-grid">
+                <div class="classic22-home-main-left">
+                    <div class="post-cards">
+                        <?php while ($this->next()): ?>
+                            <?php $cover = postCoverUrl($this); ?>
+
+                            <article class="post post-card" itemscope itemtype="http://schema.org/BlogPosting">
+                                <?php if ($cover): ?>
+                                    <a class="post-card-cover" href="<?php $this->permalink(); ?>">
+                                        <img
+                                            src="<?php echo htmlspecialchars($cover, ENT_QUOTES, $this->options->charset); ?>"
+                                            alt="<?php $this->title(); ?>"
+                                            loading="lazy"
+                                            itemprop="image"
+                                        >
+                                    </a>
+                                <?php endif; ?>
+
+                                <div class="post-card-inner">
+                                    <?php postMeta($this, 'card'); ?>
+
+                                    <div class="entry-content fmt">
+                                        <p class="post-card-excerpt text-muted" itemprop="description">
+                                            <?php echo htmlspecialchars(postExcerptText($this, 160), ENT_QUOTES, $this->options->charset); ?>
+                                        </p>
+                                        <p class="more">
+                                            <a href="<?php $this->permalink(); ?>" title="<?php $this->title(); ?>">
+                                                <?php _e('阅读全文'); ?>
+                                            </a>
+                                        </p>
+                                    </div>
+                                </div>
+                            </article>
+                        <?php endwhile; ?>
+                    </div>
+
+                    <nav><?php $this->pageNav(_t('前一页'), _t('后一页'), 2, '...', array('wrapTag' => 'ul', 'itemTag' => 'li')); ?></nav>
+                </div>
+
+            </div>
         </section>
     </div>
 

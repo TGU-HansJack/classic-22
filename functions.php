@@ -1946,6 +1946,684 @@ function classic22AiIsAllowedDomainRequest($options): bool
     return false;
 }
 
+function classic22TimelineStorageDir(): string
+{
+    return __DIR__ . '/timeline';
+}
+
+function classic22TimelineStorageFile(): string
+{
+    return classic22TimelineStorageDir() . '/timeline.json';
+}
+
+function classic22TimelineEnsureStorage(): void
+{
+    $dir = classic22TimelineStorageDir();
+
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+
+    if (!is_dir($dir)) {
+        return;
+    }
+
+    $protectFiles = [
+        $dir . '/index.php' => "<?php\nhttp_response_code(403);\nexit;\n",
+        $dir . '/.htaccess' => "<IfModule mod_authz_core.c>\n  Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n  Deny from all\n</IfModule>\n",
+        $dir . '/web.config' => "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<configuration>\n  <system.webServer>\n    <security>\n      <authorization>\n        <add accessType=\"Deny\" users=\"*\" />\n      </authorization>\n    </security>\n  </system.webServer>\n</configuration>\n",
+    ];
+
+    foreach ($protectFiles as $path => $content) {
+        if (is_file($path)) {
+            continue;
+        }
+
+        @file_put_contents($path, $content, LOCK_EX);
+    }
+}
+
+function classic22TimelineReadCache(): array
+{
+    classic22TimelineEnsureStorage();
+
+    $path = classic22TimelineStorageFile();
+    if (!is_file($path)) {
+        return [];
+    }
+
+    $raw = @file_get_contents($path);
+    if (!is_string($raw) || trim($raw) === '') {
+        return [];
+    }
+
+    $decoded = json_decode($raw, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function classic22TimelineWriteCache(array $payload): bool
+{
+    classic22TimelineEnsureStorage();
+
+    $path = classic22TimelineStorageFile();
+    $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+    if (!is_string($encoded) || $encoded === '') {
+        return false;
+    }
+
+    return @file_put_contents($path, $encoded, LOCK_EX) !== false;
+}
+
+function classic22TimelinePlainText(string $text, int $limit = 80): string
+{
+    $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
+    $text = strip_tags($text);
+    $text = trim((string) preg_replace('/\s+/u', ' ', $text));
+    if ($text === '') {
+        return '';
+    }
+
+    return \Typecho\Common::subStr($text, 0, max(10, $limit), '...');
+}
+
+function classic22TimelineFormatTime(int $timestamp): string
+{
+    if ($timestamp <= 0) {
+        return '';
+    }
+
+    try {
+        if (class_exists('\\Typecho\\Date')) {
+            $date = new \Typecho\Date($timestamp);
+            return trim((string) $date->format('Y-m-d H:i'));
+        }
+    } catch (\Throwable $exception) {
+    }
+
+    return date('Y-m-d H:i', $timestamp);
+}
+
+function classic22TimelineRelativeTime(int $timestamp): string
+{
+    if ($timestamp <= 0) {
+        return '';
+    }
+
+    $delta = max(0, time() - $timestamp);
+    if ($delta < 60) {
+        return '刚刚';
+    }
+
+    if ($delta < 3600) {
+        return floor($delta / 60) . ' 分钟前';
+    }
+
+    if ($delta < 86400) {
+        return floor($delta / 3600) . ' 小时前';
+    }
+
+    if ($delta < 86400 * 30) {
+        return floor($delta / 86400) . ' 天前';
+    }
+
+    if ($delta < 86400 * 365) {
+        return floor($delta / (86400 * 30)) . ' 个月前';
+    }
+
+    return floor($delta / (86400 * 365)) . ' 年前';
+}
+
+function classic22TimelinePostFallbackLink(\Widget\Archive $archive, int $cid): string
+{
+    if ($cid <= 0) {
+        return '';
+    }
+
+    $baseUrl = rtrim(classic22LinuxDoSiteBaseUrl($archive->options), '/');
+    return $baseUrl . '/?p=' . $cid;
+}
+
+function classic22TimelinePostCreatedTimestamp(int $cid): int
+{
+    if ($cid <= 0) {
+        return 0;
+    }
+
+    static $cache = [];
+    if (isset($cache[$cid])) {
+        return (int) $cache[$cid];
+    }
+
+    $db = classic22LinuxDoDb();
+    if (!is_object($db)) {
+        $cache[$cid] = 0;
+        return 0;
+    }
+
+    try {
+        $row = $db->fetchRow(
+            $db->select('created')
+                ->from('table.contents')
+                ->where('cid = ?', $cid)
+                ->limit(1)
+        );
+
+        $created = 0;
+        if (is_array($row)) {
+            $created = (int) ($row['created'] ?? 0);
+        } elseif (is_object($row)) {
+            $created = (int) ($row->created ?? 0);
+        }
+
+        $cache[$cid] = $created > 0 ? $created : 0;
+        return (int) $cache[$cid];
+    } catch (\Throwable $exception) {
+        $cache[$cid] = 0;
+        return 0;
+    }
+}
+
+function classic22TimelineBuildArticleMap(\Widget\Archive $archive, int $limit = 160): array
+{
+    $list = classic22AiBuildArticleListPayload($archive, $limit);
+    $map = [];
+
+    foreach ($list as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $id = (int) ($item['id'] ?? 0);
+        if ($id <= 0) {
+            continue;
+        }
+
+        $map[$id] = [
+            'id' => $id,
+            'title' => trim((string) ($item['title'] ?? ('文章 #' . $id))),
+            'permalink' => trim((string) ($item['permalink'] ?? '')),
+            'views' => (int) ($item['views'] ?? 0),
+            'comments' => (int) ($item['comments'] ?? 0),
+            'date' => trim((string) ($item['date'] ?? '')),
+        ];
+    }
+
+    return $map;
+}
+
+function classic22TimelineBuildRankings(\Widget\Archive $archive, array $articleMap): array
+{
+    $result = [
+        'views' => [],
+        'comments' => [],
+    ];
+
+    $context = classic22AiBuildSiteContext($archive);
+    $viewRows = is_array($context['topViews'] ?? null) ? $context['topViews'] : [];
+    $commentRows = is_array($context['topComments'] ?? null) ? $context['topComments'] : [];
+
+    foreach (array_slice($viewRows, 0, 8) as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $id = (int) ($item['id'] ?? 0);
+        if ($id <= 0) {
+            continue;
+        }
+
+        $fallback = $articleMap[$id] ?? null;
+        $title = trim((string) ($item['title'] ?? ($fallback['title'] ?? '文章 #' . $id)));
+        $permalink = trim((string) ($fallback['permalink'] ?? ''));
+
+        $result['views'][] = [
+            'id' => $id,
+            'title' => $title,
+            'count' => (int) ($item['views'] ?? 0),
+            'permalink' => $permalink !== '' ? $permalink : classic22TimelinePostFallbackLink($archive, $id),
+        ];
+    }
+
+    foreach (array_slice($commentRows, 0, 8) as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $id = (int) ($item['id'] ?? 0);
+        if ($id <= 0) {
+            continue;
+        }
+
+        $fallback = $articleMap[$id] ?? null;
+        $title = trim((string) ($item['title'] ?? ($fallback['title'] ?? '文章 #' . $id)));
+        $permalink = trim((string) ($fallback['permalink'] ?? ''));
+
+        $result['comments'][] = [
+            'id' => $id,
+            'title' => $title,
+            'count' => (int) ($item['comments'] ?? 0),
+            'permalink' => $permalink !== '' ? $permalink : classic22TimelinePostFallbackLink($archive, $id),
+        ];
+    }
+
+    return $result;
+}
+
+function classic22TimelineTopIds(array $list, int $limit = 3): array
+{
+    $ids = [];
+
+    foreach (array_slice($list, 0, max(1, $limit)) as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $id = (int) ($item['id'] ?? 0);
+        if ($id > 0) {
+            $ids[] = $id;
+        }
+    }
+
+    return $ids;
+}
+
+function classic22TimelineTitlesByIds(array $ids, array $list): array
+{
+    $map = [];
+    foreach ($list as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $id = (int) ($item['id'] ?? 0);
+        if ($id > 0) {
+            $map[$id] = trim((string) ($item['title'] ?? ('文章 #' . $id)));
+        }
+    }
+
+    $titles = [];
+    foreach ($ids as $id) {
+        $id = (int) $id;
+        if ($id > 0 && isset($map[$id])) {
+            $titles[] = $map[$id];
+        }
+    }
+
+    return $titles;
+}
+
+function classic22TimelineRankChangeEvents(array $currentRankings, array $previousRankings): array
+{
+    $events = [];
+    $now = time();
+
+    $boards = [
+        'views' => '浏览榜',
+        'comments' => '评论榜',
+    ];
+
+    foreach ($boards as $key => $label) {
+        $currentList = is_array($currentRankings[$key] ?? null) ? $currentRankings[$key] : [];
+        $previousList = is_array($previousRankings[$key] ?? null) ? $previousRankings[$key] : [];
+
+        $currentTop = classic22TimelineTopIds($currentList, 3);
+        $previousTop = classic22TimelineTopIds($previousList, 3);
+
+        if ($currentTop === $previousTop) {
+            continue;
+        }
+
+        $entered = array_values(array_diff($currentTop, $previousTop));
+        $dropped = array_values(array_diff($previousTop, $currentTop));
+
+        $parts = [];
+        $enteredTitles = classic22TimelineTitlesByIds($entered, $currentList);
+        if (!empty($enteredTitles)) {
+            $parts[] = '新上榜：' . implode('、', $enteredTitles);
+        }
+
+        $droppedTitles = classic22TimelineTitlesByIds($dropped, $previousList);
+        if (!empty($droppedTitles)) {
+            $parts[] = '跌出：' . implode('、', $droppedTitles);
+        }
+
+        if (empty($parts)) {
+            $parts[] = 'TOP3 排名顺序发生变化';
+        }
+
+        $topLink = trim((string) (($currentList[0]['permalink'] ?? '') ?: ''));
+
+        $events[] = [
+            'type' => 'rank',
+            'timestamp' => $now,
+            'time' => classic22TimelineFormatTime($now),
+            'relativeTime' => classic22TimelineRelativeTime($now),
+            'title' => $label . ' TOP3 变动提醒',
+            'summary' => implode('；', $parts),
+            'link' => $topLink,
+        ];
+    }
+
+    return $events;
+}
+
+function classic22TimelineRecentPostEvents(\Widget\Archive $archive, array $articleMap, int $limit = 6): array
+{
+    $events = [];
+
+    foreach (array_slice(array_values($articleMap), 0, max(1, $limit)) as $article) {
+        if (!is_array($article)) {
+            continue;
+        }
+
+        $id = (int) ($article['id'] ?? 0);
+        if ($id <= 0) {
+            continue;
+        }
+
+        $timestamp = classic22TimelinePostCreatedTimestamp($id);
+        if ($timestamp <= 0) {
+            $timestamp = time();
+        }
+
+        $title = trim((string) ($article['title'] ?? ('文章 #' . $id)));
+        $link = trim((string) ($article['permalink'] ?? ''));
+        if ($link === '') {
+            $link = classic22TimelinePostFallbackLink($archive, $id);
+        }
+
+        $events[] = [
+            'type' => 'post',
+            'timestamp' => $timestamp,
+            'time' => classic22TimelineFormatTime($timestamp),
+            'relativeTime' => classic22TimelineRelativeTime($timestamp),
+            'title' => $title,
+            'summary' => '发布了新文章，点击可直达原文。',
+            'link' => $link,
+        ];
+    }
+
+    return $events;
+}
+
+function classic22TimelineRecentCommentEvents(\Widget\Archive $archive, array $articleMap, int $limit = 6): array
+{
+    $events = [];
+    $db = classic22LinuxDoDb();
+    if (!is_object($db)) {
+        return [];
+    }
+
+    try {
+        $rows = (array) $db->fetchAll(
+            $db->select(
+                'table.comments.coid',
+                'table.comments.cid',
+                'table.comments.author',
+                'table.comments.text',
+                'table.comments.created',
+                'table.contents.title'
+            )
+                ->from('table.comments')
+                ->join('table.contents', 'table.comments.cid = table.contents.cid')
+                ->where('table.comments.status = ?', 'approved')
+                ->where('table.contents.type = ?', 'post')
+                ->where('table.contents.status = ?', 'publish')
+                ->order('table.comments.created', \Typecho\Db::SORT_DESC)
+                ->limit(max(1, (int) $limit))
+        );
+    } catch (\Throwable $exception) {
+        return [];
+    }
+
+    foreach ($rows as $row) {
+        $coid = (int) ($row['coid'] ?? 0);
+        $cid = (int) ($row['cid'] ?? 0);
+        if ($coid <= 0 || $cid <= 0) {
+            continue;
+        }
+
+        $author = trim((string) ($row['author'] ?? '访客'));
+        if ($author === '') {
+            $author = '访客';
+        }
+
+        $postTitle = trim((string) ($row['title'] ?? ''));
+        if ($postTitle === '' && isset($articleMap[$cid])) {
+            $postTitle = trim((string) ($articleMap[$cid]['title'] ?? ''));
+        }
+        if ($postTitle === '') {
+            $postTitle = '文章 #' . $cid;
+        }
+
+        $timestamp = (int) ($row['created'] ?? 0);
+        $postLink = trim((string) (($articleMap[$cid]['permalink'] ?? '') ?: ''));
+        if ($postLink === '') {
+            $postLink = classic22TimelinePostFallbackLink($archive, $cid);
+        }
+
+        $link = $postLink;
+        if ($link !== '') {
+            $link .= '#comment-' . $coid;
+        }
+
+        $summary = classic22TimelinePlainText((string) ($row['text'] ?? ''), 42);
+        if ($summary === '') {
+            $summary = '发布了新评论。';
+        }
+
+        $events[] = [
+            'type' => 'comment',
+            'timestamp' => $timestamp > 0 ? $timestamp : time(),
+            'time' => classic22TimelineFormatTime($timestamp),
+            'relativeTime' => classic22TimelineRelativeTime($timestamp),
+            'title' => $author . ' 评论了《' . $postTitle . '》',
+            'summary' => $summary,
+            'link' => $link,
+        ];
+    }
+
+    return $events;
+}
+
+function classic22TimelineAiRewriteSummaries(\Widget\Archive $archive, array $events): array
+{
+    if (empty($events)) {
+        return $events;
+    }
+
+    $apiKey = trim((string) classic22LinuxDoGetOption($archive->options, 'aiApiKey', ''));
+    if ($apiKey === '') {
+        return $events;
+    }
+
+    $provider = strtolower(trim((string) classic22LinuxDoGetOption($archive->options, 'aiProvider', 'openai')));
+    if (!in_array($provider, ['openai', 'rightcode'], true)) {
+        $provider = 'openai';
+    }
+
+    $baseUrl = classic22AiSanitizeBaseUrl((string) classic22LinuxDoGetOption($archive->options, 'aiApiBaseUrl', 'https://api.openai.com/v1'), $provider);
+    if ($provider === 'rightcode') {
+        $baseLower = strtolower($baseUrl);
+        if ($baseLower === '' || strpos($baseLower, 'api.openai.com') !== false) {
+            $baseUrl = 'https://www.right.codes/codex/v1';
+        }
+    }
+
+    $mode = classic22AiResolveApiMode($archive->options);
+    if ($provider === 'rightcode' && $mode !== 'responses') {
+        $mode = 'responses';
+    }
+
+    $model = classic22AiDefaultModel($archive->options);
+    $apiUrl = $baseUrl . ($mode === 'responses' ? '/responses' : '/chat/completions');
+
+    $seedItems = [];
+    foreach ($events as $index => $item) {
+        $seedItems[] = [
+            'index' => $index + 1,
+            'type' => trim((string) ($item['type'] ?? 'timeline')),
+            'title' => trim((string) ($item['title'] ?? '')),
+            'summary' => trim((string) ($item['summary'] ?? '')),
+            'time' => trim((string) ($item['time'] ?? '')),
+        ];
+    }
+
+    $messages = [
+        [
+            'role' => 'system',
+            'content' => '你是博客首页时间线文案助手。请仅改写摘要 summary，让其更自然简洁（20~48字）。禁止编造事实、禁止新增事件、禁止输出敏感信息。只返回 JSON：{"items":[{"index":1,"summary":"..."}]}，不要附加其它文本。',
+        ],
+        [
+            'role' => 'user',
+            'content' => '请改写以下事件摘要：' . json_encode($seedItems, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ],
+    ];
+
+    $payload = $mode === 'responses'
+        ? classic22AiBuildResponsesPayload($model, $messages)
+        : classic22AiBuildChatCompletionsPayload($model, $messages);
+
+    if (!is_string($payload) || trim($payload) === '') {
+        return $events;
+    }
+
+    $response = classic22AiRequest($apiUrl, $payload, $apiKey);
+    if (empty($response['ok'])) {
+        return $events;
+    }
+
+    $decoded = json_decode((string) ($response['body'] ?? ''), true);
+    if (!is_array($decoded)) {
+        return $events;
+    }
+
+    $answer = trim(classic22AiExtractAnswerByMode($decoded, $mode));
+    if ($answer === '') {
+        return $events;
+    }
+
+    if (preg_match('/```(?:json)?\s*(\{.*\})\s*```/is', $answer, $match)) {
+        $answer = trim((string) ($match[1] ?? ''));
+    }
+
+    $parsed = json_decode($answer, true);
+    if (!is_array($parsed)) {
+        $start = strpos($answer, '{');
+        $end = strrpos($answer, '}');
+        if ($start !== false && $end !== false && $end > $start) {
+            $snippet = substr($answer, $start, $end - $start + 1);
+            $parsed = json_decode((string) $snippet, true);
+        }
+    }
+
+    if (!is_array($parsed) || !is_array($parsed['items'] ?? null)) {
+        return $events;
+    }
+
+    $summaryByIndex = [];
+    foreach ($parsed['items'] as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $idx = (int) ($item['index'] ?? 0);
+        $summary = classic22TimelinePlainText(trim((string) ($item['summary'] ?? '')), 48);
+        if ($idx <= 0 || $summary === '') {
+            continue;
+        }
+
+        $summaryByIndex[$idx] = $summary;
+    }
+
+    if (empty($summaryByIndex)) {
+        return $events;
+    }
+
+    foreach ($events as $index => $event) {
+        $key = $index + 1;
+        if (isset($summaryByIndex[$key])) {
+            $events[$index]['summary'] = $summaryByIndex[$key];
+        }
+    }
+
+    return $events;
+}
+
+function classic22TimelineGeneratePayload(\Widget\Archive $archive, array $previous = []): array
+{
+    $articleMap = classic22TimelineBuildArticleMap($archive, 160);
+
+    $rankings = classic22TimelineBuildRankings($archive, $articleMap);
+    $previousRankings = is_array($previous['rankings'] ?? null) ? $previous['rankings'] : [];
+
+    $events = [];
+    $events = array_merge(
+        $events,
+        classic22TimelineRecentPostEvents($archive, $articleMap, 6),
+        classic22TimelineRecentCommentEvents($archive, $articleMap, 6),
+        classic22TimelineRankChangeEvents($rankings, $previousRankings)
+    );
+
+    usort($events, static function ($left, $right): int {
+        return (int) ($right['timestamp'] ?? 0) <=> (int) ($left['timestamp'] ?? 0);
+    });
+
+    $events = array_slice($events, 0, 12);
+    $events = classic22TimelineAiRewriteSummaries($archive, $events);
+
+    return [
+        'generatedAt' => time(),
+        'updatedAt' => classic22TimelineFormatTime(time()),
+        'timeline' => $events,
+        'rankings' => [
+            'views' => array_slice(is_array($rankings['views'] ?? null) ? $rankings['views'] : [], 0, 6),
+            'comments' => array_slice(is_array($rankings['comments'] ?? null) ? $rankings['comments'] : [], 0, 6),
+        ],
+    ];
+}
+
+function classic22TimelineHomeData(\Widget\Archive $archive): array
+{
+    $empty = [
+        'generatedAt' => 0,
+        'updatedAt' => '',
+        'timeline' => [],
+        'rankings' => [
+            'views' => [],
+            'comments' => [],
+        ],
+    ];
+
+    if (!is_object($archive)) {
+        return $empty;
+    }
+
+    if (!method_exists($archive, 'is') || !$archive->is('index')) {
+        return $empty;
+    }
+
+    $cache = classic22TimelineReadCache();
+    $generatedAt = (int) ($cache['generatedAt'] ?? 0);
+    $ttl = 900;
+
+    if ($generatedAt > 0 && (time() - $generatedAt) <= $ttl) {
+        return array_merge($empty, $cache);
+    }
+
+    $generated = classic22TimelineGeneratePayload($archive, $cache);
+    if (!empty($generated['timeline']) || !empty($generated['rankings']['views']) || !empty($generated['rankings']['comments'])) {
+        classic22TimelineWriteCache($generated);
+        return array_merge($empty, $generated);
+    }
+
+    if (!empty($cache)) {
+        return array_merge($empty, $cache);
+    }
+
+    return $empty;
+}
+
 function classic22AiGetModels($options): array
 {
     $raw = classic22LinuxDoGetOption($options, 'aiModels', "gpt-4o-mini\ngpt-4.1-mini\ngpt-4o");
