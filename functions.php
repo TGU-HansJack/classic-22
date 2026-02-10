@@ -1946,6 +1946,182 @@ function classic22AiIsAllowedDomainRequest($options): bool
     return false;
 }
 
+function classic22AiLogsDir(): string
+{
+    return __DIR__ . '/ai_logs';
+}
+
+function classic22AiLogsEnsureStorage(): bool
+{
+    $dir = classic22AiLogsDir();
+
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+
+    if (!is_dir($dir)) {
+        return false;
+    }
+
+    $protectFiles = [
+        $dir . '/index.php' => "<?php\nhttp_response_code(403);\nexit;\n",
+        $dir . '/.htaccess' => "<IfModule mod_authz_core.c>\n  Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n  Deny from all\n</IfModule>\n",
+        $dir . '/web.config' => "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<configuration>\n  <system.webServer>\n    <security>\n      <authorization>\n        <add accessType=\"Deny\" users=\"*\" />\n      </authorization>\n    </security>\n  </system.webServer>\n</configuration>\n",
+    ];
+
+    foreach ($protectFiles as $path => $content) {
+        if (is_file($path)) {
+            continue;
+        }
+
+        @file_put_contents($path, $content, LOCK_EX);
+    }
+
+    return true;
+}
+
+function classic22AiExtractClientIp(): string
+{
+    $candidates = [
+        trim((string) ($_SERVER['HTTP_CF_CONNECTING_IP'] ?? '')),
+        trim((string) ($_SERVER['HTTP_X_REAL_IP'] ?? '')),
+        trim((string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? '')),
+        trim((string) ($_SERVER['REMOTE_ADDR'] ?? '')),
+    ];
+
+    foreach ($candidates as $value) {
+        $value = trim((string) $value);
+        if ($value === '') {
+            continue;
+        }
+
+        if (strpos($value, ',') !== false) {
+            $value = trim((string) (explode(',', $value)[0] ?? ''));
+        }
+
+        if ($value !== '' && filter_var($value, FILTER_VALIDATE_IP)) {
+            return $value;
+        }
+    }
+
+    return '';
+}
+
+function classic22AiLogChatRequest(string $ip, string $message, array $meta = []): void
+{
+    if (!classic22AiLogsEnsureStorage()) {
+        return;
+    }
+
+    $ip = trim($ip);
+    if ($ip === '') {
+        $ip = 'unknown';
+    }
+
+    $record = array_merge([
+        'time' => date('Y-m-d H:i:s'),
+        'timestamp' => time(),
+        'ip' => $ip,
+        'message' => $message,
+    ], $meta);
+
+    $encoded = json_encode($record, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($encoded) || $encoded === '') {
+        return;
+    }
+
+    $path = classic22AiLogsDir() . '/chat-' . date('Y-m-d') . '.jsonl';
+    @file_put_contents($path, $encoded . "\n", FILE_APPEND | LOCK_EX);
+}
+
+function classic22AiConsumeDailyQuota(string $ip, int $limit = 5): array
+{
+    $limit = max(0, (int) $limit);
+
+    $ip = trim($ip);
+    if ($ip === '') {
+        $ip = 'unknown';
+    }
+
+    $today = date('Y-m-d');
+    $result = [
+        'ok' => true,
+        'date' => $today,
+        'limit' => $limit,
+        'used' => 0,
+        'remaining' => $limit,
+    ];
+
+    if ($limit <= 0) {
+        return $result;
+    }
+
+    if (!classic22AiLogsEnsureStorage()) {
+        return [
+            'ok' => false,
+            'error' => 'AI 日志目录不可写，无法记录与限额。请检查主题目录权限：' . classic22AiLogsDir(),
+        ];
+    }
+
+    $path = classic22AiLogsDir() . '/quota-' . $today . '.json';
+    $handle = @fopen($path, 'c+');
+    if (!is_resource($handle)) {
+        return [
+            'ok' => false,
+            'error' => '无法写入 AI 配额文件：' . $path,
+        ];
+    }
+
+    if (!@flock($handle, LOCK_EX)) {
+        @fclose($handle);
+        return [
+            'ok' => false,
+            'error' => '无法锁定 AI 配额文件：' . $path,
+        ];
+    }
+
+    $raw = '';
+    try {
+        $raw = (string) stream_get_contents($handle);
+    } catch (\Throwable $exception) {
+        $raw = '';
+    }
+
+    $data = json_decode($raw, true);
+    if (!is_array($data)) {
+        $data = [];
+    }
+
+    $current = (int) ($data[$ip] ?? 0);
+    if ($current >= $limit) {
+        $result['ok'] = false;
+        $result['used'] = $current;
+        $result['remaining'] = 0;
+
+        @flock($handle, LOCK_UN);
+        @fclose($handle);
+        return $result;
+    }
+
+    $current++;
+    $data[$ip] = $current;
+    $result['used'] = $current;
+    $result['remaining'] = max(0, $limit - $current);
+
+    $encoded = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (is_string($encoded) && $encoded !== '') {
+        @rewind($handle);
+        @ftruncate($handle, 0);
+        @fwrite($handle, $encoded);
+        @fflush($handle);
+    }
+
+    @flock($handle, LOCK_UN);
+    @fclose($handle);
+
+    return $result;
+}
+
 function classic22TimelineStorageDir(): string
 {
     return __DIR__ . '/timeline';
@@ -3466,6 +3642,54 @@ function classic22AiHandleRequest($archive): void
 
     $selectedArticleId = (int) ($data['articleId'] ?? 0);
     $selectedArticleUrl = trim((string) ($data['articleUrl'] ?? ''));
+
+    $clientIp = classic22AiExtractClientIp();
+    $dailyLimit = 5;
+    $quota = classic22AiConsumeDailyQuota($clientIp, $dailyLimit);
+    if (!empty($quota['error'])) {
+        classic22AiLogChatRequest($clientIp, $question, [
+            'ok' => false,
+            'blocked' => 'quota_error',
+            'error' => (string) $quota['error'],
+            'limit' => $dailyLimit,
+            'model' => $model,
+            'articleId' => $selectedArticleId,
+            'articleUrl' => $selectedArticleUrl,
+        ]);
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => (string) $quota['error'],
+        ], 500);
+    }
+
+    if (empty($quota['ok'])) {
+        classic22AiLogChatRequest($clientIp, $question, [
+            'ok' => false,
+            'blocked' => 'daily_quota',
+            'date' => (string) ($quota['date'] ?? ''),
+            'used' => (int) ($quota['used'] ?? 0),
+            'limit' => $dailyLimit,
+            'model' => $model,
+            'articleId' => $selectedArticleId,
+            'articleUrl' => $selectedArticleUrl,
+        ]);
+
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => '今日 AI 使用次数已达上限（' . $dailyLimit . ' 次/天）。请明天再试。',
+        ], 429);
+    }
+
+    classic22AiLogChatRequest($clientIp, $question, [
+        'ok' => true,
+        'date' => (string) ($quota['date'] ?? ''),
+        'used' => (int) ($quota['used'] ?? 0),
+        'remaining' => (int) ($quota['remaining'] ?? 0),
+        'limit' => $dailyLimit,
+        'model' => $model,
+        'articleId' => $selectedArticleId,
+        'articleUrl' => $selectedArticleUrl,
+    ]);
 
     $article = null;
     if ($selectedArticleId > 0) {
