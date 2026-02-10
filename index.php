@@ -139,6 +139,34 @@ $classic22TimelineUpdatedAt = trim((string) ($classic22TimelineData['updatedAt']
                                 $timelineSummary = trim((string) ($item['summary'] ?? ''));
                                 $timelineRelative = trim((string) ($item['relativeTime'] ?? ''));
                                 $timelineLink = trim((string) ($item['link'] ?? ''));
+
+                                $timelineType = trim((string) ($item['type'] ?? ''));
+                                $timelineBody = $timelineSummary !== '' ? $timelineSummary : $timelineTitle;
+
+                                if ($timelineType === 'post') {
+                                    $timelineBody = '新发布：' . ($timelineTitle !== '' ? $timelineTitle : $timelineBody);
+                                } elseif ($timelineType === 'comment') {
+                                    $commentAuthor = '';
+                                    if ($timelineTitle !== '' && preg_match('/^(.+?)\\s*评论了/u', $timelineTitle, $match)) {
+                                        $commentAuthor = trim((string) ($match[1] ?? ''));
+                                    }
+
+                                    if ($timelineSummary !== '') {
+                                        $timelineBody = $commentAuthor !== ''
+                                            ? ($commentAuthor . ' 评论：' . $timelineSummary)
+                                            : $timelineSummary;
+                                    } else {
+                                        $timelineBody = $timelineTitle;
+                                    }
+                                }
+                                if ($timelineBody !== '') {
+                                    $timelineBody = (string) preg_replace('/(?:，\s*)?点击可直达原文[。.!！]?/u', '', $timelineBody);
+                                    $timelineBody = trim($timelineBody);
+                                    if (substr($timelineBody, -3) !== '...') {
+                                        $timelineBody = (string) preg_replace('/[，。.!！]+$/u', '', $timelineBody);
+                                    }
+                                    $timelineBody = trim($timelineBody);
+                                }
                             ?>
                             <li class="classic22-home-timeline-item">
                                 <div class="classic22-home-timeline-dot" aria-hidden="true"></div>
@@ -147,14 +175,12 @@ $classic22TimelineUpdatedAt = trim((string) ($classic22TimelineData['updatedAt']
                                         <p class="classic22-home-timeline-time"><?php echo htmlspecialchars($timelineRelative, ENT_QUOTES, $this->options->charset); ?></p>
                                     <?php endif; ?>
 
-                                    <?php if ($timelineLink !== ''): ?>
-                                        <a class="classic22-home-timeline-title" href="<?php echo htmlspecialchars($timelineLink, ENT_QUOTES, $this->options->charset); ?>"><?php echo htmlspecialchars($timelineTitle, ENT_QUOTES, $this->options->charset); ?></a>
-                                    <?php else: ?>
-                                        <p class="classic22-home-timeline-title"><?php echo htmlspecialchars($timelineTitle, ENT_QUOTES, $this->options->charset); ?></p>
-                                    <?php endif; ?>
-
-                                    <?php if ($timelineSummary !== ''): ?>
-                                        <p class="classic22-home-timeline-summary"><?php echo htmlspecialchars($timelineSummary, ENT_QUOTES, $this->options->charset); ?></p>
+                                    <?php if ($timelineBody !== ''): ?>
+                                        <?php if ($timelineLink !== ''): ?>
+                                            <a class="classic22-home-timeline-summary" href="<?php echo htmlspecialchars($timelineLink, ENT_QUOTES, $this->options->charset); ?>"><?php echo htmlspecialchars($timelineBody, ENT_QUOTES, $this->options->charset); ?></a>
+                                        <?php else: ?>
+                                            <p class="classic22-home-timeline-summary"><?php echo htmlspecialchars($timelineBody, ENT_QUOTES, $this->options->charset); ?></p>
+                                        <?php endif; ?>
                                     <?php endif; ?>
                                 </div>
                             </li>

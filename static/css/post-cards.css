@@ -39,7 +39,7 @@ main.container-fluid {
 
 .classic22-home-sidebar-card {
   border: 1px solid var(--pico-muted-border-color);
-  border-radius: 0.8rem;
+  border-radius: var(--pico-border-radius);
   background: var(--pico-card-background-color, var(--pico-background-color));
   padding: 0.66rem 0.72rem;
 }
@@ -74,7 +74,7 @@ main.container-fluid {
 
 .classic22-home-timeline-dot {
   position: absolute;
-  left: -1.08rem;
+  left: -0.98rem;
   top: 0.3rem;
   width: 0.44rem;
   height: 0.44rem;
@@ -112,11 +112,19 @@ a.classic22-home-timeline-title:focus-visible {
   font-size: 0.68rem;
   line-height: 1.34;
   color: var(--pico-muted-color);
+  text-decoration: none;
   word-break: break-word;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+a.classic22-home-timeline-summary:hover,
+a.classic22-home-timeline-summary:focus,
+a.classic22-home-timeline-summary:focus-visible {
+  color: var(--pico-primary);
+  text-decoration: underline;
 }
 
 .classic22-home-rank-list {

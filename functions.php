@@ -2338,7 +2338,7 @@ function classic22TimelineRecentPostEvents(\Widget\Archive $archive, array $arti
             'time' => classic22TimelineFormatTime($timestamp),
             'relativeTime' => classic22TimelineRelativeTime($timestamp),
             'title' => $title,
-            'summary' => '发布了新文章，点击可直达原文。',
+            'summary' => '发布了新文章。',
             'link' => $link,
         ];
     }
