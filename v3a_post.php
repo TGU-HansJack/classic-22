@@ -724,6 +724,874 @@ if (!function_exists('v3aPostRedirectWithNotice')) {
     }
 }
 
+if (!function_exists('v3aPostGetThemeOption')) {
+    function v3aPostGetThemeOption($archive, string $key, string $default = ''): string
+    {
+        if (function_exists('classic22LinuxDoGetOption') && is_object($archive) && isset($archive->options)) {
+            return (string) classic22LinuxDoGetOption($archive->options, $key, $default);
+        }
+
+        if (is_object($archive) && isset($archive->options) && is_object($archive->options)) {
+            try {
+                $value = $archive->options->{$key};
+                if ($value !== null && !is_array($value) && !is_object($value)) {
+                    $normalized = trim((string) $value);
+                    if ($normalized !== '') {
+                        return $normalized;
+                    }
+                }
+            } catch (\Throwable $e) {
+            }
+        }
+
+        return $default;
+    }
+}
+
+if (!function_exists('v3aPostDefaultAiPrompt')) {
+    function v3aPostDefaultAiPrompt(): string
+    {
+        return "你是博客投稿内容生成助手。你将得到一个网页链接，以及从网页解析出的标题/作者/描述/正文文本。\n"
+            . "请基于这些信息生成一篇用于本站发布的投稿文章，并只返回严格 JSON（不要代码块、不要附加文字）。\n\n"
+            . "JSON 格式：\n"
+            . "{\n"
+            . "  \"title\": \"\",\n"
+            . "  \"content\": \"\",\n"
+            . "  \"project_link\": \"\",\n"
+            . "  \"project_type\": \"typecho|halo\",\n"
+            . "  \"project_author\": \"\"\n"
+            . "}\n\n"
+            . "要求：\n"
+            . "- 禁止编造不存在的功能、数据、作者信息；不确定的字段请返回空字符串。\n"
+            . "- title：简短明确（<=60字）。\n"
+            . "- project_link：必须是有效 URL，优先项目主页/仓库地址；否则使用原始链接。\n"
+            . "- project_type：只能是 typecho 或 halo；无法判断则根据内容关键词推断，仍不确定则留空。\n"
+            . "- content：使用 Markdown，包含：简介、主要特性、安装/使用、相关链接（至少包含 project_link）。";
+    }
+}
+
+if (!function_exists('v3aPostDefaultSchemas')) {
+    function v3aPostDefaultSchemas(): array
+    {
+        return [
+            [
+                'key' => 'source_url',
+                'name' => 'source_url',
+                'label' => '投稿链接',
+                'type' => 'input',
+                'order' => 0,
+                'required' => true,
+                'description' => '仅需粘贴链接，系统将自动解析页面并生成投稿内容。',
+                'placeholder' => 'https://',
+                'input_type' => 'url',
+                'rows' => 6,
+                'multiple' => false,
+                'max_length' => 2048,
+                'min_length' => 10,
+                'default' => '',
+                'options' => [],
+            ],
+            [
+                'key' => 'title',
+                'name' => 'title',
+                'label' => '标题',
+                'type' => 'input',
+                'order' => 10,
+                'required' => false,
+                'description' => '',
+                'placeholder' => '',
+                'input_type' => 'text',
+                'rows' => 6,
+                'multiple' => false,
+                'max_length' => 200,
+                'min_length' => 0,
+                'default' => '',
+                'options' => [],
+            ],
+            [
+                'key' => 'project_author',
+                'name' => 'project_author',
+                'label' => '项目作者',
+                'type' => 'input',
+                'order' => 20,
+                'required' => false,
+                'description' => '',
+                'placeholder' => '',
+                'input_type' => 'text',
+                'rows' => 6,
+                'multiple' => false,
+                'max_length' => 120,
+                'min_length' => 0,
+                'default' => '',
+                'options' => [],
+            ],
+            [
+                'key' => 'project_type',
+                'name' => 'project_type',
+                'label' => '项目类型',
+                'type' => 'select',
+                'order' => 30,
+                'required' => false,
+                'description' => '',
+                'placeholder' => '',
+                'input_type' => 'text',
+                'rows' => 6,
+                'multiple' => false,
+                'max_length' => 32,
+                'min_length' => 0,
+                'default' => '',
+                'options' => [
+                    ['value' => 'typecho', 'label' => 'Typecho'],
+                    ['value' => 'halo', 'label' => 'Halo'],
+                ],
+            ],
+            [
+                'key' => 'project_link',
+                'name' => 'project_link',
+                'label' => '项目链接',
+                'type' => 'input',
+                'order' => 40,
+                'required' => false,
+                'description' => '',
+                'placeholder' => 'https://',
+                'input_type' => 'url',
+                'rows' => 6,
+                'multiple' => false,
+                'max_length' => 2048,
+                'min_length' => 0,
+                'default' => '',
+                'options' => [],
+            ],
+            [
+                'key' => 'content',
+                'name' => 'content',
+                'label' => '文章内容（Markdown）',
+                'type' => 'editor',
+                'order' => 50,
+                'required' => false,
+                'description' => '',
+                'placeholder' => '',
+                'input_type' => 'text',
+                'rows' => 12,
+                'multiple' => false,
+                'max_length' => 20000,
+                'min_length' => 0,
+                'default' => '',
+                'options' => [],
+            ],
+        ];
+    }
+}
+
+if (!function_exists('v3aPostNormalizeUrl')) {
+    function v3aPostNormalizeUrl(string $url): string
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return '';
+        }
+
+        $url = preg_replace('/[\\x00-\\x1F\\x7F]+/', '', $url) ?? $url;
+        $url = trim($url);
+
+        if (preg_match('~^[a-z][a-z0-9+.-]*://~i', $url) && !preg_match('~^https?://~i', $url)) {
+            return $url;
+        }
+
+        if (!preg_match('~^https?://~i', $url)) {
+            $url = 'https://' . ltrim($url, '/');
+        }
+
+        return $url;
+    }
+}
+
+if (!function_exists('v3aPostIpv4ToLong')) {
+    function v3aPostIpv4ToLong(string $ip): ?int
+    {
+        $long = ip2long($ip);
+        if ($long === false) {
+            return null;
+        }
+
+        return (int) sprintf('%u', $long);
+    }
+}
+
+if (!function_exists('v3aPostIpv6MatchPrefix')) {
+    function v3aPostIpv6MatchPrefix(string $ip, string $network, int $prefixBits): bool
+    {
+        $ipBin = @inet_pton($ip);
+        $netBin = @inet_pton($network);
+        if ($ipBin === false || $netBin === false) {
+            return false;
+        }
+
+        $bytes = intdiv($prefixBits, 8);
+        $bits = $prefixBits % 8;
+
+        if ($bytes > 0 && substr($ipBin, 0, $bytes) !== substr($netBin, 0, $bytes)) {
+            return false;
+        }
+
+        if ($bits === 0) {
+            return true;
+        }
+
+        $mask = (0xff << (8 - $bits)) & 0xff;
+        return (ord($ipBin[$bytes]) & $mask) === (ord($netBin[$bytes]) & $mask);
+    }
+}
+
+if (!function_exists('v3aPostIsPrivateIp')) {
+    function v3aPostIsPrivateIp(string $ip): bool
+    {
+        $ip = trim($ip);
+        if ($ip === '') {
+            return true;
+        }
+
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            $long = v3aPostIpv4ToLong($ip);
+            if ($long === null) {
+                return true;
+            }
+
+            $ranges = [
+                ['0.0.0.0', '0.255.255.255'],
+                ['10.0.0.0', '10.255.255.255'],
+                ['100.64.0.0', '100.127.255.255'],
+                ['127.0.0.0', '127.255.255.255'],
+                ['169.254.0.0', '169.254.255.255'],
+                ['172.16.0.0', '172.31.255.255'],
+                ['192.0.0.0', '192.0.0.255'],
+                ['192.168.0.0', '192.168.255.255'],
+                ['192.0.2.0', '192.0.2.255'],
+                ['198.18.0.0', '198.19.255.255'],
+                ['198.51.100.0', '198.51.100.255'],
+                ['203.0.113.0', '203.0.113.255'],
+                ['224.0.0.0', '255.255.255.255'],
+            ];
+
+            foreach ($ranges as $range) {
+                $start = v3aPostIpv4ToLong($range[0]);
+                $end = v3aPostIpv4ToLong($range[1]);
+                if ($start === null || $end === null) {
+                    continue;
+                }
+                if ($long >= $start && $long <= $end) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            if ($ip === '::' || $ip === '::1') {
+                return true;
+            }
+            if (v3aPostIpv6MatchPrefix($ip, 'fc00::', 7)) {
+                return true;
+            }
+            if (v3aPostIpv6MatchPrefix($ip, 'fe80::', 10)) {
+                return true;
+            }
+            if (v3aPostIpv6MatchPrefix($ip, 'ff00::', 8)) {
+                return true;
+            }
+            if (v3aPostIpv6MatchPrefix($ip, '2001:db8::', 32)) {
+                return true;
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+}
+
+if (!function_exists('v3aPostResolveHostIps')) {
+    function v3aPostResolveHostIps(string $host): array
+    {
+        $host = trim($host);
+        if ($host === '') {
+            return [];
+        }
+
+        $ips = [];
+
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            $ips[] = $host;
+            return $ips;
+        }
+
+        $v4 = @gethostbynamel($host);
+        if (is_array($v4)) {
+            foreach ($v4 as $ip) {
+                if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                    $ips[] = $ip;
+                }
+            }
+        }
+
+        if (function_exists('dns_get_record') && defined('DNS_AAAA')) {
+            $records = @dns_get_record($host, DNS_AAAA);
+            if (is_array($records)) {
+                foreach ($records as $record) {
+                    $ip = trim((string) ($record['ipv6'] ?? ''));
+                    if ($ip !== '' && filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+                        $ips[] = $ip;
+                    }
+                }
+            }
+        }
+
+        return array_values(array_unique($ips));
+    }
+}
+
+if (!function_exists('v3aPostValidateRemoteUrl')) {
+    function v3aPostValidateRemoteUrl(string $url): array
+    {
+        $url = v3aPostNormalizeUrl($url);
+        if ($url === '') {
+            return ['ok' => false, 'url' => '', 'message' => '请输入链接。'];
+        }
+
+        $parts = parse_url($url);
+        if ($parts === false) {
+            return ['ok' => false, 'url' => '', 'message' => '链接格式无效。'];
+        }
+
+        $scheme = strtolower(trim((string) ($parts['scheme'] ?? '')));
+        if (!in_array($scheme, ['http', 'https'], true)) {
+            return ['ok' => false, 'url' => '', 'message' => '仅支持 http/https 链接。'];
+        }
+
+        if (!empty($parts['user']) || !empty($parts['pass'])) {
+            return ['ok' => false, 'url' => '', 'message' => '不支持带账号密码的链接。'];
+        }
+
+        $host = strtolower(trim((string) ($parts['host'] ?? '')));
+        if ($host === '') {
+            return ['ok' => false, 'url' => '', 'message' => '链接缺少域名。'];
+        }
+
+        if ($host === 'localhost' || substr($host, -10) === '.localhost') {
+            return ['ok' => false, 'url' => '', 'message' => '不允许访问本机地址。'];
+        }
+
+        $ips = v3aPostResolveHostIps($host);
+        if (empty($ips)) {
+            return ['ok' => false, 'url' => '', 'message' => '无法解析域名，请检查链接是否正确。'];
+        }
+
+        foreach ($ips as $ip) {
+            if (v3aPostIsPrivateIp($ip)) {
+                return ['ok' => false, 'url' => '', 'message' => '不允许访问内网地址。'];
+            }
+        }
+
+        return ['ok' => true, 'url' => $url, 'message' => ''];
+    }
+}
+
+if (!function_exists('v3aPostBuildAbsoluteUrl')) {
+    function v3aPostBuildAbsoluteUrl(string $baseUrl, string $location): string
+    {
+        $location = trim($location);
+        if ($location === '') {
+            return '';
+        }
+
+        if (preg_match('~^https?://~i', $location)) {
+            return $location;
+        }
+
+        if (strpos($location, '//') === 0) {
+            $scheme = (string) (parse_url($baseUrl, PHP_URL_SCHEME) ?? 'https');
+            return $scheme . ':' . $location;
+        }
+
+        $scheme = (string) (parse_url($baseUrl, PHP_URL_SCHEME) ?? '');
+        $host = (string) (parse_url($baseUrl, PHP_URL_HOST) ?? '');
+        $port = (string) (parse_url($baseUrl, PHP_URL_PORT) ?? '');
+        $path = (string) (parse_url($baseUrl, PHP_URL_PATH) ?? '/');
+
+        if ($scheme === '' || $host === '') {
+            return '';
+        }
+
+        $origin = $scheme . '://' . $host;
+        if ($port !== '') {
+            $origin .= ':' . $port;
+        }
+
+        if (strpos($location, '/') === 0) {
+            return $origin . $location;
+        }
+
+        $dir = rtrim(str_replace('\\', '/', dirname($path)), '/');
+        if ($dir === '.') {
+            $dir = '';
+        }
+
+        return $origin . $dir . '/' . ltrim($location, '/');
+    }
+}
+
+if (!function_exists('v3aPostHttpFetch')) {
+    function v3aPostHttpFetch(string $url, int $timeout = 12, int $maxBytes = 1048576): array
+    {
+        $timeout = max(3, min(30, (int) $timeout));
+        $maxBytes = max(32 * 1024, min(2 * 1024 * 1024, (int) $maxBytes));
+
+        $headers = [];
+        $body = '';
+
+        if (function_exists('curl_init')) {
+            $ch = curl_init($url);
+            if ($ch === false) {
+                return ['ok' => false, 'status' => 0, 'headers' => [], 'body' => '', 'error' => '初始化请求失败'];
+            }
+
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
+            curl_setopt($ch, CURLOPT_HEADER, false);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
+            curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+            curl_setopt($ch, CURLOPT_ENCODING, '');
+            curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (compatible; Typecho SubmitBot/1.0)');
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language: zh-CN,zh;q=0.9,en;q=0.8',
+            ]);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+
+            curl_setopt($ch, CURLOPT_HEADERFUNCTION, static function ($ch, string $line) use (&$headers): int {
+                $trimmed = trim($line);
+                if ($trimmed !== '' && strpos($trimmed, ':') !== false) {
+                    [$name, $value] = explode(':', $trimmed, 2);
+                    $name = strtolower(trim($name));
+                    $value = trim($value);
+                    if ($name !== '') {
+                        if (isset($headers[$name])) {
+                            if (is_array($headers[$name])) {
+                                $headers[$name][] = $value;
+                            } else {
+                                $headers[$name] = [$headers[$name], $value];
+                            }
+                        } else {
+                            $headers[$name] = $value;
+                        }
+                    }
+                }
+
+                return strlen($line);
+            });
+
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, static function ($ch, string $data) use (&$body, $maxBytes): int {
+                $remaining = $maxBytes - strlen($body);
+                if ($remaining > 0) {
+                    if (strlen($data) > $remaining) {
+                        $body .= substr($data, 0, $remaining);
+                    } else {
+                        $body .= $data;
+                    }
+                }
+
+                return strlen($data);
+            });
+
+            $ok = curl_exec($ch);
+            $error = curl_error($ch);
+            $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            curl_close($ch);
+
+            if ($ok === false) {
+                return [
+                    'ok' => false,
+                    'status' => $status,
+                    'headers' => $headers,
+                    'body' => $body,
+                    'error' => $error !== '' ? $error : '请求失败',
+                ];
+            }
+
+            return [
+                'ok' => $status >= 200 && $status < 300,
+                'status' => $status,
+                'headers' => $headers,
+                'body' => $body,
+                'error' => $error,
+            ];
+        }
+
+        $ctx = stream_context_create([
+            'http' => [
+                'method' => 'GET',
+                'timeout' => $timeout,
+                'header' => "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n" .
+                    "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8\r\n" .
+                    "User-Agent: Mozilla/5.0 (compatible; Typecho SubmitBot/1.0)\r\n",
+            ],
+        ]);
+
+        $res = @file_get_contents($url, false, $ctx);
+        if (!is_string($res)) {
+            return ['ok' => false, 'status' => 0, 'headers' => [], 'body' => '', 'error' => '请求失败'];
+        }
+
+        if (strlen($res) > $maxBytes) {
+            $res = substr($res, 0, $maxBytes);
+        }
+
+        return ['ok' => true, 'status' => 200, 'headers' => [], 'body' => $res, 'error' => ''];
+    }
+}
+
+if (!function_exists('v3aPostFetchHtml')) {
+    function v3aPostFetchHtml(string $url, int $maxRedirects = 3): array
+    {
+        $current = $url;
+        $lastStatus = 0;
+        $lastError = '';
+
+        for ($i = 0; $i <= $maxRedirects; $i++) {
+            $response = v3aPostHttpFetch($current, 12, 1024 * 1024);
+            $status = (int) ($response['status'] ?? 0);
+            $headers = is_array($response['headers'] ?? null) ? $response['headers'] : [];
+            $body = (string) ($response['body'] ?? '');
+            $lastStatus = $status;
+            $lastError = (string) ($response['error'] ?? '');
+
+            $location = $headers['location'] ?? '';
+            if (is_array($location)) {
+                $location = (string) (end($location) ?: '');
+            }
+            $location = trim((string) $location);
+
+            if ($status >= 300 && $status < 400 && $location !== '') {
+                $next = v3aPostBuildAbsoluteUrl($current, $location);
+                if ($next === '') {
+                    return ['ok' => false, 'url' => $current, 'status' => $status, 'body' => '', 'message' => '跳转链接无效。'];
+                }
+
+                $validated = v3aPostValidateRemoteUrl($next);
+                if (empty($validated['ok'])) {
+                    return ['ok' => false, 'url' => $current, 'status' => $status, 'body' => '', 'message' => '跳转链接不被允许。'];
+                }
+
+                $current = (string) ($validated['url'] ?? $next);
+                continue;
+            }
+
+            if ($status >= 200 && $status < 300) {
+                $ctype = $headers['content-type'] ?? '';
+                if (is_array($ctype)) {
+                    $ctype = (string) (end($ctype) ?: '');
+                }
+                $ctype = strtolower((string) $ctype);
+                if ($ctype !== '' && strpos($ctype, 'text/html') === false && strpos($ctype, 'application/xhtml+xml') === false) {
+                    return ['ok' => false, 'url' => $current, 'status' => $status, 'body' => '', 'message' => '仅支持解析 HTML 页面。'];
+                }
+
+                $body = trim($body);
+                if ($body === '') {
+                    return ['ok' => false, 'url' => $current, 'status' => $status, 'body' => '', 'message' => '页面内容为空。'];
+                }
+
+                return ['ok' => true, 'url' => $current, 'status' => $status, 'body' => $body, 'message' => ''];
+            }
+
+            $statusText = $status > 0 ? ('HTTP ' . $status) : '请求失败';
+            $message = $lastError !== '' ? $statusText . '：' . $lastError : $statusText;
+            return ['ok' => false, 'url' => $current, 'status' => $status, 'body' => '', 'message' => $message];
+        }
+
+        $statusText = $lastStatus > 0 ? ('HTTP ' . $lastStatus) : '请求失败';
+        $message = $lastError !== '' ? $statusText . '：' . $lastError : ($statusText . '：跳转次数过多');
+        return ['ok' => false, 'url' => $current, 'status' => $lastStatus, 'body' => '', 'message' => $message];
+    }
+}
+
+if (!function_exists('v3aPostExtractPageInfo')) {
+    function v3aPostExtractPageInfo(string $html): array
+    {
+        $title = '';
+        $author = '';
+        $description = '';
+        $text = '';
+
+        if (class_exists('DOMDocument')) {
+            $prev = libxml_use_internal_errors(true);
+            $doc = new \DOMDocument();
+            $loaded = false;
+            try {
+                $loaded = @$doc->loadHTML('<?xml encoding="utf-8" ?>' . $html, LIBXML_NONET);
+            } catch (\Throwable $e) {
+                $loaded = false;
+            }
+
+            if ($loaded) {
+                $xpath = new \DOMXPath($doc);
+
+                $stripList = $xpath->query('//script|//style|//noscript');
+                if ($stripList instanceof \DOMNodeList) {
+                    foreach ($stripList as $node) {
+                        if ($node instanceof \DOMNode && $node->parentNode) {
+                            $node->parentNode->removeChild($node);
+                        }
+                    }
+                }
+
+                $meta = static function (string $query) use ($xpath): string {
+                    $list = $xpath->query($query);
+                    if (!($list instanceof \DOMNodeList)) {
+                        return '';
+                    }
+
+                    $node = $list->item(0);
+                    if (!($node instanceof \DOMNode)) {
+                        return '';
+                    }
+
+                    return trim((string) ($node->nodeValue ?? ''));
+                };
+
+                $title = $meta("//meta[@property='og:title']/@content");
+                if ($title === '') {
+                    $title = $meta("//meta[@name='twitter:title']/@content");
+                }
+                if ($title === '') {
+                    $titleList = $xpath->query('//title');
+                    $titleNode = $titleList instanceof \DOMNodeList ? $titleList->item(0) : null;
+                    $title = $titleNode instanceof \DOMNode ? trim((string) ($titleNode->textContent ?? '')) : '';
+                }
+
+                $description = $meta("//meta[@property='og:description']/@content");
+                if ($description === '') {
+                    $description = $meta("//meta[@name='description']/@content");
+                }
+                if ($description === '') {
+                    $description = $meta("//meta[@name='twitter:description']/@content");
+                }
+
+                $author = $meta("//meta[@name='author']/@content");
+                if ($author === '') {
+                    $author = $meta("//meta[@property='article:author']/@content");
+                }
+
+                $candidates = [];
+                $candidateList = $xpath->query('//article|//main');
+                if ($candidateList instanceof \DOMNodeList) {
+                    foreach ($candidateList as $node) {
+                        if ($node instanceof \DOMNode) {
+                            $candidates[] = $node;
+                        }
+                    }
+                }
+                $best = null;
+                $bestLen = 0;
+                foreach ($candidates as $node) {
+                    $candidateText = trim((string) ($node->textContent ?? ''));
+                    $candidateText = preg_replace('/\\s+/u', ' ', $candidateText) ?? '';
+                    $len = function_exists('mb_strlen') ? (int) mb_strlen($candidateText) : strlen($candidateText);
+                    if ($len > $bestLen) {
+                        $bestLen = $len;
+                        $best = $node;
+                    }
+                }
+
+                if ($best instanceof \DOMNode) {
+                    $text = trim((string) ($best->textContent ?? ''));
+                } else {
+                    $bodyList = $xpath->query('//body');
+                    $bodyNode = $bodyList instanceof \DOMNodeList ? $bodyList->item(0) : null;
+                    $text = $bodyNode instanceof \DOMNode ? trim((string) ($bodyNode->textContent ?? '')) : '';
+                }
+
+                libxml_clear_errors();
+            }
+            libxml_use_internal_errors($prev);
+        }
+
+        if ($text === '') {
+            $text = strip_tags($html);
+        }
+
+        $title = trim((string) preg_replace('/\\s+/u', ' ', $title));
+        $author = trim((string) preg_replace('/\\s+/u', ' ', $author));
+        $description = trim((string) preg_replace('/\\s+/u', ' ', $description));
+        $text = trim((string) preg_replace('/\\s+/u', ' ', $text));
+
+        if (function_exists('mb_substr')) {
+            if (mb_strlen($text) > 12000) {
+                $text = (string) mb_substr($text, 0, 12000);
+            }
+        } else {
+            if (strlen($text) > 12000) {
+                $text = substr($text, 0, 12000);
+            }
+        }
+
+        return [
+            'title' => $title,
+            'author' => $author,
+            'description' => $description,
+            'text' => $text,
+        ];
+    }
+}
+
+if (!function_exists('v3aPostGuessProjectType')) {
+    function v3aPostGuessProjectType(string $url, array $pageInfo): string
+    {
+        $haystack = strtolower($url . ' ' . (string) ($pageInfo['title'] ?? '') . ' ' . (string) ($pageInfo['text'] ?? ''));
+        if (strpos($haystack, 'halo') !== false) {
+            return 'halo';
+        }
+        if (strpos($haystack, 'typecho') !== false || strpos($haystack, 'typecho ') !== false) {
+            return 'typecho';
+        }
+        return '';
+    }
+}
+
+if (!function_exists('v3aPostAiGenerate')) {
+    function v3aPostAiGenerate($archive, string $sourceUrl, array $pageInfo): array
+    {
+        if (!function_exists('classic22LinuxDoGetOption')) {
+            return ['ok' => false, 'message' => '主题未启用 AI 能力。', 'data' => []];
+        }
+
+        $apiKey = trim((string) classic22LinuxDoGetOption($archive->options, 'aiApiKey', ''));
+        if ($apiKey === '') {
+            return ['ok' => false, 'message' => '请先在主题设置中配置 AI API Key。', 'data' => []];
+        }
+
+        if (
+            !function_exists('classic22AiSanitizeBaseUrl')
+            || !function_exists('classic22AiResolveApiMode')
+            || !function_exists('classic22AiBuildChatCompletionsPayload')
+            || !function_exists('classic22AiBuildResponsesPayload')
+            || !function_exists('classic22AiDefaultModel')
+            || !function_exists('classic22AiRequest')
+            || !function_exists('classic22AiExtractAnswerByMode')
+        ) {
+            return ['ok' => false, 'message' => '主题 AI 组件不完整，请更新主题文件。', 'data' => []];
+        }
+
+        $provider = strtolower(trim((string) classic22LinuxDoGetOption($archive->options, 'aiProvider', 'openai')));
+        if (!in_array($provider, ['openai', 'rightcode'], true)) {
+            $provider = 'openai';
+        }
+
+        $baseUrl = classic22AiSanitizeBaseUrl((string) classic22LinuxDoGetOption($archive->options, 'aiApiBaseUrl', 'https://api.openai.com/v1'), $provider);
+        if ($provider === 'rightcode') {
+            $baseLower = strtolower($baseUrl);
+            if ($baseLower === '' || strpos($baseLower, 'api.openai.com') !== false) {
+                $baseUrl = 'https://www.right.codes/codex/v1';
+            }
+        }
+
+        $mode = classic22AiResolveApiMode($archive->options);
+        if ($provider === 'rightcode' && $mode !== 'responses') {
+            $mode = 'responses';
+        }
+
+        $model = classic22AiDefaultModel($archive->options);
+        $apiUrl = rtrim($baseUrl, '/') . ($mode === 'responses' ? '/responses' : '/chat/completions');
+
+        $prompt = trim((string) classic22LinuxDoGetOption($archive->options, 'v3aPostAiPrompt', ''));
+        if ($prompt === '') {
+            $prompt = v3aPostDefaultAiPrompt();
+        }
+
+        $seed = [
+            'source_url' => $sourceUrl,
+            'page_title' => (string) ($pageInfo['title'] ?? ''),
+            'page_author' => (string) ($pageInfo['author'] ?? ''),
+            'page_description' => (string) ($pageInfo['description'] ?? ''),
+            'page_text' => (string) ($pageInfo['text'] ?? ''),
+        ];
+
+        $messages = [
+            ['role' => 'system', 'content' => $prompt],
+            ['role' => 'user', 'content' => '请根据以下网页信息生成投稿内容：' . json_encode($seed, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)],
+        ];
+
+        $payload = $mode === 'responses'
+            ? classic22AiBuildResponsesPayload($model, $messages)
+            : classic22AiBuildChatCompletionsPayload($model, $messages);
+
+        if (!is_string($payload) || trim($payload) === '') {
+            return ['ok' => false, 'message' => 'AI 请求体生成失败。', 'data' => []];
+        }
+
+        $response = classic22AiRequest($apiUrl, $payload, $apiKey);
+        if (empty($response['ok'])) {
+            $remoteMsg = function_exists('classic22AiExtractRemoteErrorMessage')
+                ? classic22AiExtractRemoteErrorMessage($response)
+                : '';
+            $message = $remoteMsg !== '' ? $remoteMsg : ('AI 请求失败（' . (int) ($response['status'] ?? 0) . '）');
+            return ['ok' => false, 'message' => $message, 'data' => []];
+        }
+
+        $decoded = json_decode((string) ($response['body'] ?? ''), true);
+        if (!is_array($decoded)) {
+            return ['ok' => false, 'message' => 'AI 返回格式无效。', 'data' => []];
+        }
+
+        $answer = trim(classic22AiExtractAnswerByMode($decoded, $mode));
+        if ($answer === '') {
+            return ['ok' => false, 'message' => 'AI 未返回有效内容。', 'data' => []];
+        }
+
+        if (preg_match('/```(?:json)?\\s*(\\{.*\\})\\s*```/is', $answer, $match)) {
+            $answer = trim((string) ($match[1] ?? ''));
+        }
+
+        $parsed = json_decode($answer, true);
+        if (!is_array($parsed)) {
+            $start = strpos($answer, '{');
+            $end = strrpos($answer, '}');
+            if ($start !== false && $end !== false && $end > $start) {
+                $snippet = substr($answer, $start, $end - $start + 1);
+                $parsed = json_decode((string) $snippet, true);
+            }
+        }
+
+        if (!is_array($parsed)) {
+            return ['ok' => false, 'message' => 'AI 输出无法解析为 JSON。', 'data' => []];
+        }
+
+        $title = trim((string) ($parsed['title'] ?? ''));
+        $content = trim((string) ($parsed['content'] ?? ''));
+        $projectLink = trim((string) ($parsed['project_link'] ?? ''));
+        $projectType = trim((string) ($parsed['project_type'] ?? ''));
+        $projectAuthor = trim((string) ($parsed['project_author'] ?? ''));
+
+        if ($projectType !== '' && !in_array($projectType, ['typecho', 'halo'], true)) {
+            $projectType = '';
+        }
+
+        return [
+            'ok' => true,
+            'message' => '',
+            'data' => [
+                'title' => $title,
+                'content' => $content,
+                'project_link' => $projectLink,
+                'project_type' => $projectType,
+                'project_author' => $projectAuthor,
+            ],
+        ];
+    }
+}
+
 if (!headers_sent()) {
     header('X-Robots-Tag: noindex, nofollow, noarchive', true);
     header('X-Content-Type-Options: nosniff', true);
@@ -731,12 +1599,20 @@ if (!headers_sent()) {
 
 $charset = (string) ($this->options->charset ?? 'UTF-8');
 $isAdmin = v3aPostIsAdmin($this);
-$rows = v3aPostLoadFields((int) $this->cid, $this->fields ?? null);
-$config = v3aPostBuildSchema($rows);
-$schemas = (array) ($config['schemas'] ?? []);
-$limitSeconds = (int) ($config['limit'] ?? 0);
-$recaptchaId = trim((string) ($config['recaptcha_id'] ?? ''));
-$recaptchaKey = trim((string) ($config['recaptcha_key'] ?? ''));
+$schemas = v3aPostDefaultSchemas();
+$submitSchemas = array_values(array_filter($schemas, static function (array $schema): bool {
+    return (string) ($schema['name'] ?? '') === 'source_url';
+}));
+$previewSchemas = array_values(array_filter($schemas, static function (array $schema): bool {
+    $name = (string) ($schema['name'] ?? '');
+    return in_array($name, ['source_url', 'title', 'project_type', 'project_author', 'project_link'], true);
+}));
+
+$limitSeconds = max(0, (int) v3aPostGetThemeOption($this, 'v3aPostLimitSeconds', '60'));
+$recaptchaId = trim(v3aPostGetThemeOption($this, 'v3aPostRecaptchaV3SiteKey', ''));
+$recaptchaKey = trim(v3aPostGetThemeOption($this, 'v3aPostRecaptchaV3SecretKey', ''));
+$recaptchaEnabled = $recaptchaId !== '' && $recaptchaKey !== '';
+$aiApiKeyConfigured = trim(v3aPostGetThemeOption($this, 'aiApiKey', '')) !== '';
 
 $storeDir = __DIR__ . DIRECTORY_SEPARATOR . 'v3a_post';
 $storeFile = $storeDir . DIRECTORY_SEPARATOR . 'page-' . (int) $this->cid . '.json';
@@ -748,7 +1624,7 @@ $noticeType = '';
 $noticeMessage = '';
 
 $formValues = [];
-foreach ($schemas as $schema) {
+foreach ($submitSchemas as $schema) {
     $default = $schema['default'] ?? '';
     $formValues[(string) ($schema['name'] ?? '')] = is_array($default) ? $default : (string) $default;
 }
@@ -810,89 +1686,227 @@ if ($storeReady && isset($_SERVER['REQUEST_METHOD']) && strtoupper((string) $_SE
     } else {
         $entryId = trim((string) ($_POST['entry_id'] ?? ''));
         $isEdit = $action === 'admin_update';
-        if ($isEdit && !$isAdmin) {
-            $noticeType = 'error';
-            $noticeMessage = '仅管理员可编辑数据。';
-        } elseif (empty($schemas)) {
-            $noticeType = 'error';
-            $noticeMessage = '当前页面未配置投稿表单字段。';
-        } else {
-            $payload = isset($_POST['v3a_post_data']) && is_array($_POST['v3a_post_data']) ? $_POST['v3a_post_data'] : [];
-            $parsed = v3aPostCollect($schemas, $payload);
-            $values = (array) ($parsed['values'] ?? []);
-            if (!$isEdit) {
-                $formValues = $values;
-            }
+        $payload = isset($_POST['v3a_post_data']) && is_array($_POST['v3a_post_data']) ? $_POST['v3a_post_data'] : [];
 
-            if (!empty($parsed['errors'])) {
+        if ($isEdit) {
+            if (!$isAdmin) {
                 $noticeType = 'error';
-                $noticeMessage = (string) $parsed['errors'][0];
-            } elseif ($isEdit) {
-                $found = -1;
-                foreach ($submissions as $index => $item) {
-                    if ((string) ($item['id'] ?? '') === $entryId) {
-                        $found = (int) $index;
-                        break;
-                    }
-                }
-                if ($found < 0) {
-                    $noticeType = 'error';
-                    $noticeMessage = '未找到对应投稿记录。';
-                } else {
-                    $submissions[$found]['values'] = $values;
-                    $submissions[$found]['updated'] = time();
-                    $store['updated_at'] = time();
-                    $store['submissions'] = array_values($submissions);
-                    if (v3aPostStoreSave($storeFile, $store)) {
-                        v3aPostRedirectWithNotice($formAction, 'success', '投稿记录已更新。');
-                        $noticeType = 'success';
-                        $noticeMessage = '投稿记录已更新。';
-                    } else {
-                        $noticeType = 'error';
-                        $noticeMessage = '写入失败，请检查目录权限。';
-                    }
-                }
+                $noticeMessage = '仅管理员可编辑数据。';
             } else {
-                $ip = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
-                $ua = trim((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));
-                $salt = (string) ($this->options->siteUrl ?? __TYPECHO_ROOT_DIR__);
-                $finger = v3aPostFingerprint($ip, $ua, $salt);
-                $wait = v3aPostLimitWait($submissions, $finger, $limitSeconds);
-                if ($wait > 0) {
+                $parsed = v3aPostCollect($schemas, $payload);
+                $values = (array) ($parsed['values'] ?? []);
+
+                if (!empty($parsed['errors'])) {
                     $noticeType = 'error';
-                    $noticeMessage = '提交过于频繁，请 ' . $wait . ' 秒后再试。';
+                    $noticeMessage = (string) $parsed['errors'][0];
                 } else {
-                    $verify = v3aPostVerifyCaptcha($recaptchaKey, trim((string) ($_POST['recaptcha_token'] ?? '')), $ip);
-                    if (empty($verify['ok'])) {
-                        $noticeType = 'error';
-                        $noticeMessage = (string) ($verify['message'] ?? '人机验证失败。');
-                    } else {
-                        try {
-                            $rand = bin2hex(random_bytes(4));
-                        } catch (\Throwable $e) {
-                            $rand = dechex(mt_rand(0, 0xfffffff));
+                    $found = -1;
+                    foreach ($submissions as $index => $item) {
+                        if ((string) ($item['id'] ?? '') === $entryId) {
+                            $found = (int) $index;
+                            break;
                         }
-                        $submissions[] = [
-                            'id' => date('YmdHis') . '-' . strtolower($rand),
-                            'created' => time(),
-                            'updated' => 0,
-                            'status' => 'pending',
-                            'fingerprint' => $finger,
-                            'values' => $values,
-                        ];
+                    }
+
+                    if ($found < 0) {
+                        $noticeType = 'error';
+                        $noticeMessage = '未找到对应投稿记录。';
+                    } else {
+                        $submissions[$found]['values'] = $values;
+                        $submissions[$found]['updated'] = time();
                         $store['updated_at'] = time();
                         $store['submissions'] = array_values($submissions);
                         if (v3aPostStoreSave($storeFile, $store)) {
-                            v3aPostRedirectWithNotice($formAction, 'success', '投稿已提交成功，感谢你的参与！');
+                            v3aPostRedirectWithNotice($formAction, 'success', '投稿记录已更新。');
                             $noticeType = 'success';
-                            $noticeMessage = '投稿已提交成功，感谢你的参与！';
-                            foreach ($schemas as $schema) {
-                                $default = $schema['default'] ?? '';
-                                $formValues[(string) $schema['name']] = is_array($default) ? $default : (string) $default;
-                            }
+                            $noticeMessage = '投稿记录已更新。';
                         } else {
                             $noticeType = 'error';
-                            $noticeMessage = '投稿保存失败，请稍后重试。';
+                            $noticeMessage = '写入失败，请检查目录权限。';
+                        }
+                    }
+                }
+            }
+        } else {
+            if (empty($submitSchemas)) {
+                $noticeType = 'error';
+                $noticeMessage = '投稿表单未初始化，请更新模板文件。';
+            } else {
+                $parsed = v3aPostCollect($submitSchemas, $payload);
+                $values = (array) ($parsed['values'] ?? []);
+                $formValues = $values;
+
+                if (!empty($parsed['errors'])) {
+                    $noticeType = 'error';
+                    $noticeMessage = (string) $parsed['errors'][0];
+                } else {
+                    $sourceUrl = trim((string) ($values['source_url'] ?? ''));
+                    $validatedUrl = v3aPostValidateRemoteUrl($sourceUrl);
+                    if (empty($validatedUrl['ok'])) {
+                        $noticeType = 'error';
+                        $noticeMessage = (string) ($validatedUrl['message'] ?? '链接无效。');
+                    } else {
+                        $sourceUrl = (string) ($validatedUrl['url'] ?? $sourceUrl);
+
+                        $ip = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+                        $ua = trim((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));
+                        $salt = (string) ($this->options->siteUrl ?? __TYPECHO_ROOT_DIR__);
+                        $finger = v3aPostFingerprint($ip, $ua, $salt);
+                        $wait = v3aPostLimitWait($submissions, $finger, $limitSeconds);
+
+                        if ($wait > 0) {
+                            $noticeType = 'error';
+                            $noticeMessage = '提交过于频繁，请 ' . $wait . ' 秒后再试。';
+                        } else {
+                            if ($recaptchaEnabled) {
+                                $verify = v3aPostVerifyCaptcha($recaptchaKey, trim((string) ($_POST['recaptcha_token'] ?? '')), $ip);
+                                if (empty($verify['ok'])) {
+                                    $noticeType = 'error';
+                                    $noticeMessage = (string) ($verify['message'] ?? '人机验证失败。');
+                                }
+                            }
+
+                            if ($noticeType !== 'error') {
+                                $fetch = v3aPostFetchHtml($sourceUrl, 3);
+                                if (empty($fetch['ok'])) {
+                                    $noticeType = 'error';
+                                    $noticeMessage = (string) ($fetch['message'] ?? '网页解析失败，请稍后重试。');
+                                } else {
+                                    $finalUrl = (string) ($fetch['url'] ?? $sourceUrl);
+                                    $pageInfo = v3aPostExtractPageInfo((string) ($fetch['body'] ?? ''));
+
+                                    $generated = [
+                                        'title' => '',
+                                        'content' => '',
+                                        'project_link' => '',
+                                        'project_type' => '',
+                                        'project_author' => '',
+                                    ];
+
+                                    if ($aiApiKeyConfigured) {
+                                        $aiResult = v3aPostAiGenerate($this, $finalUrl, $pageInfo);
+                                        if (empty($aiResult['ok'])) {
+                                            $noticeType = 'error';
+                                            $noticeMessage = 'AI 生成失败：' . (string) ($aiResult['message'] ?? '');
+                                        } else {
+                                            $generated = array_merge($generated, (array) ($aiResult['data'] ?? []));
+                                        }
+                                    }
+
+                                    if ($noticeType !== 'error') {
+                                        $storeValues = [];
+                                        foreach ($schemas as $schema) {
+                                            $name = (string) ($schema['name'] ?? '');
+                                            if ($name === '') {
+                                                continue;
+                                            }
+                                            $default = $schema['default'] ?? '';
+                                            $storeValues[$name] = is_array($default) ? $default : (string) $default;
+                                        }
+
+                                        $fallbackTitle = trim((string) ($pageInfo['title'] ?? ''));
+                                        if ($fallbackTitle === '') {
+                                            $fallbackTitle = (string) (parse_url($finalUrl, PHP_URL_HOST) ?? '投稿');
+                                        }
+
+                                        $projectTitle = trim((string) ($generated['title'] ?? ''));
+                                        if ($projectTitle === '') {
+                                            $projectTitle = $fallbackTitle;
+                                        }
+
+                                        $projectAuthor = trim((string) ($generated['project_author'] ?? ''));
+                                        if ($projectAuthor === '') {
+                                            $projectAuthor = trim((string) ($pageInfo['author'] ?? ''));
+                                        }
+
+                                        $projectType = trim((string) ($generated['project_type'] ?? ''));
+                                        if ($projectType === '') {
+                                            $projectType = v3aPostGuessProjectType($finalUrl, $pageInfo);
+                                        }
+
+                                        $projectLink = trim((string) ($generated['project_link'] ?? ''));
+                                        if ($projectLink === '') {
+                                            $projectLink = $finalUrl;
+                                        } else {
+                                            $linkValidated = v3aPostValidateRemoteUrl($projectLink);
+                                            if (empty($linkValidated['ok'])) {
+                                                $projectLink = $finalUrl;
+                                            } else {
+                                                $projectLink = (string) ($linkValidated['url'] ?? $projectLink);
+                                            }
+                                        }
+
+                                        $content = trim((string) ($generated['content'] ?? ''));
+                                        if ($content === '') {
+                                            $excerpt = trim((string) ($pageInfo['description'] ?? ''));
+                                            if ($excerpt === '' && !empty($pageInfo['text'])) {
+                                                $excerpt = v3aPostSubstr((string) $pageInfo['text'], 200);
+                                            }
+
+                                            $content = '# ' . $projectTitle . "\n\n";
+                                            if ($excerpt !== '') {
+                                                $content .= $excerpt . "\n\n";
+                                            }
+                                            if ($projectAuthor !== '') {
+                                                $content .= "- 作者：{$projectAuthor}\n";
+                                            }
+                                            if ($projectType !== '') {
+                                                $content .= "- 类型：{$projectType}\n";
+                                            }
+                                            $content .= "- 项目链接：{$projectLink}\n";
+                                            $content .= "- 来源链接：{$finalUrl}\n";
+                                        }
+
+                                        $storeValues['source_url'] = $finalUrl;
+                                        $storeValues['title'] = $projectTitle;
+                                        $storeValues['project_author'] = $projectAuthor;
+                                        $storeValues['project_type'] = $projectType;
+                                        $storeValues['project_link'] = $projectLink;
+                                        $storeValues['content'] = $content;
+
+                                        foreach ($schemas as $schema) {
+                                            $name = (string) ($schema['name'] ?? '');
+                                            if ($name === '' || !isset($storeValues[$name]) || is_array($storeValues[$name])) {
+                                                continue;
+                                            }
+                                            $max = max(0, (int) ($schema['max_length'] ?? 0));
+                                            if ($max > 0 && v3aPostLen((string) $storeValues[$name]) > $max) {
+                                                $storeValues[$name] = v3aPostSubstr((string) $storeValues[$name], $max);
+                                            }
+                                        }
+
+                                        try {
+                                            $rand = bin2hex(random_bytes(4));
+                                        } catch (\Throwable $e) {
+                                            $rand = dechex(mt_rand(0, 0xfffffff));
+                                        }
+
+                                        $submissions[] = [
+                                            'id' => date('YmdHis') . '-' . strtolower($rand),
+                                            'created' => time(),
+                                            'updated' => 0,
+                                            'status' => 'pending',
+                                            'fingerprint' => $finger,
+                                            'values' => $storeValues,
+                                        ];
+
+                                        $store['updated_at'] = time();
+                                        $store['submissions'] = array_values($submissions);
+                                        if (v3aPostStoreSave($storeFile, $store)) {
+                                            v3aPostRedirectWithNotice($formAction, 'success', '投稿已提交成功，感谢你的参与！');
+                                            $noticeType = 'success';
+                                            $noticeMessage = '投稿已提交成功，感谢你的参与！';
+                                            foreach ($submitSchemas as $schema) {
+                                                $default = $schema['default'] ?? '';
+                                                $formValues[(string) $schema['name']] = is_array($default) ? $default : (string) $default;
+                                            }
+                                        } else {
+                                            $noticeType = 'error';
+                                            $noticeMessage = '投稿保存失败，请稍后重试。';
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1015,59 +2029,46 @@ if (!function_exists('v3aPostRenderField')) {
                     <?php endif; ?>
 
                     <div class="v3a-post-form-card">
-                        <h3>投稿表单</h3>
+                        <h3>链接投稿</h3>
 
-                        <?php if (empty($schemas)): ?>
-                            <p>当前页面尚未检测到可用表单字段。</p>
-                            <?php if ($isAdmin): ?>
-                                <div class="v3a-post-config-tip">在本页「自定义字段」中新增字段，字段名即表单名，字段类型选 JSON，值示例：
-{
-  "type": "input",
-  "label": "昵称",
-  "required": true,
-  "placeholder": "请输入昵称"
-}
+                        <form id="v3a-post-form" method="post" action="<?php echo v3aPostH($formAction, $charset); ?>" data-recaptcha-sitekey="<?php echo v3aPostH($recaptchaId, $charset); ?>">
+                            <input type="hidden" name="v3a_action" value="submit">
+                            <input type="hidden" name="_" value="<?php echo v3aPostH($csrfToken, $charset); ?>">
+                            <input type="hidden" name="recaptcha_token" value="">
+                            <div class="v3a-post-hp" aria-hidden="true"><label>请勿填写<input type="text" name="v3a_hp" autocomplete="off" tabindex="-1"></label></div>
 
-支持 type：input / editor / checkbox / radio / select
-可选字段：description、default、options、multiple、rows、inputType、maxLength、minLength、order
-限频字段：limit（秒）
-reCAPTCHA v3 字段：reCAPTCHA_v3_id、reCAPTCHA_v3_key</div>
+                            <div class="v3a-post-grid">
+                                <?php foreach ($submitSchemas as $schema): ?>
+                                    <?php
+                                    $fieldName = (string) ($schema['name'] ?? '');
+                                    $fieldLabel = (string) ($schema['label'] ?? $fieldName);
+                                    $fieldKey = (string) ($schema['key'] ?? '');
+                                    $fieldType = (string) ($schema['type'] ?? 'input');
+                                    $fieldValue = $formValues[$fieldName] ?? ($schema['default'] ?? '');
+                                    $fieldClass = 'v3a-post-field';
+                                    if (in_array($fieldType, ['checkbox', 'radio'], true)) {
+                                        $fieldClass .= ' v3a-post-field-inline';
+                                    }
+                                    ?>
+                                    <div class="<?php echo v3aPostH($fieldClass, $charset); ?>">
+                                        <label for="<?php echo v3aPostH('v3a-post-' . $fieldKey, $charset); ?>"><?php echo v3aPostH($fieldLabel, $charset); ?><?php if (!empty($schema['required'])): ?><span class="v3a-post-required">*</span><?php endif; ?></label>
+                                        <?php v3aPostRenderField($schema, $fieldValue, 'v3a_post_data[' . $fieldKey . ']', 'v3a-post-' . $fieldKey, $charset, !empty($schema['required'])); ?>
+                                        <?php if (!empty($schema['description'])): ?><small class="v3a-post-help"><?php echo v3aPostH((string) $schema['description'], $charset); ?></small><?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+
+                            <div class="v3a-post-form-actions">
+                                <button type="submit">生成并提交</button>
+                                <?php if ($limitSeconds > 0): ?><small class="v3a-post-help">提交频率限制：每 <?php echo (int) $limitSeconds; ?> 秒一次</small><?php endif; ?>
+                            </div>
+                            <?php if ($recaptchaEnabled): ?><small class="v3a-post-help">已启用 reCAPTCHA v3 防刷验证。</small><?php endif; ?>
+                            <?php if ($aiApiKeyConfigured): ?>
+                                <small class="v3a-post-help">已启用 AI 生成内容。</small>
+                            <?php else: ?>
+                                <small class="v3a-post-help">未配置 AI API Key，将仅使用基础解析生成内容。</small>
                             <?php endif; ?>
-                        <?php else: ?>
-                            <form id="v3a-post-form" method="post" action="<?php echo v3aPostH($formAction, $charset); ?>" data-recaptcha-sitekey="<?php echo v3aPostH($recaptchaId, $charset); ?>">
-                                <input type="hidden" name="v3a_action" value="submit">
-                                <input type="hidden" name="_" value="<?php echo v3aPostH($csrfToken, $charset); ?>">
-                                <input type="hidden" name="recaptcha_token" value="">
-                                <div class="v3a-post-hp" aria-hidden="true"><label>请勿填写<input type="text" name="v3a_hp" autocomplete="off" tabindex="-1"></label></div>
-
-                                <div class="v3a-post-grid">
-                                    <?php foreach ($schemas as $schema): ?>
-                                        <?php
-                                        $fieldName = (string) ($schema['name'] ?? '');
-                                        $fieldLabel = (string) ($schema['label'] ?? $fieldName);
-                                        $fieldKey = (string) ($schema['key'] ?? '');
-                                        $fieldType = (string) ($schema['type'] ?? 'input');
-                                        $fieldValue = $formValues[$fieldName] ?? ($schema['default'] ?? '');
-                                        $fieldClass = 'v3a-post-field';
-                                        if (in_array($fieldType, ['checkbox', 'radio'], true)) {
-                                            $fieldClass .= ' v3a-post-field-inline';
-                                        }
-                                        ?>
-                                        <div class="<?php echo v3aPostH($fieldClass, $charset); ?>">
-                                            <label for="<?php echo v3aPostH('v3a-post-' . $fieldKey, $charset); ?>"><?php echo v3aPostH($fieldLabel, $charset); ?><?php if (!empty($schema['required'])): ?><span class="v3a-post-required">*</span><?php endif; ?></label>
-                                            <?php v3aPostRenderField($schema, $fieldValue, 'v3a_post_data[' . $fieldKey . ']', 'v3a-post-' . $fieldKey, $charset, !empty($schema['required'])); ?>
-                                            <?php if (!empty($schema['description'])): ?><small class="v3a-post-help"><?php echo v3aPostH((string) $schema['description'], $charset); ?></small><?php endif; ?>
-                                        </div>
-                                    <?php endforeach; ?>
-                                </div>
-
-                                <div class="v3a-post-form-actions">
-                                    <button type="submit">提交投稿</button>
-                                    <?php if ($limitSeconds > 0): ?><small class="v3a-post-help">提交频率限制：每 <?php echo (int) $limitSeconds; ?> 秒一次</small><?php endif; ?>
-                                </div>
-                                <?php if ($recaptchaId !== '' && $recaptchaKey !== ''): ?><small class="v3a-post-help">已启用 reCAPTCHA v3 防刷验证。</small><?php endif; ?>
-                            </form>
-                        <?php endif; ?>
+                        </form>
                     </div>
 
                     <div class="v3a-post-list-card" id="v3a-post-pending-list">
@@ -1097,7 +2098,7 @@ reCAPTCHA v3 字段：reCAPTCHA_v3_id、reCAPTCHA_v3_key</div>
                                         <?php if ($updated > 0): ?> ｜最后编辑：<?php echo v3aPostFormatLocalTime($updated, 'Y-m-d H:i:s'); ?><?php endif; ?>
                                     </div>
 
-                                    <?php foreach ($schemas as $schema): ?>
+                                    <?php foreach ($previewSchemas as $schema): ?>
                                         <?php
                                         $name = (string) ($schema['name'] ?? '');
                                         $label = (string) ($schema['label'] ?? $name);
@@ -1161,7 +2162,7 @@ reCAPTCHA v3 字段：reCAPTCHA_v3_id、reCAPTCHA_v3_key</div>
     </div>
 </main>
 
-<?php if ($recaptchaId !== '' && $recaptchaKey !== ''): ?>
+<?php if ($recaptchaEnabled): ?>
     <script src="https://www.recaptcha.net/recaptcha/api.js?render=<?php echo rawurlencode($recaptchaId); ?>" async defer></script>
     <script>
         (function () {

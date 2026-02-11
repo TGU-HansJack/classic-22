@@ -295,6 +295,42 @@ HTML;
     );
     $form->addInput($linuxDoCommentEnabled);
 
+    $v3aPostLimitSeconds = new \Typecho\Widget\Helper\Form\Element\Text(
+        'v3aPostLimitSeconds',
+        null,
+        '60',
+        _t('投稿提交频率限制（秒）'),
+        _t('用于投稿页防刷。填写 0 表示不限制。')
+    );
+    $form->addInput($v3aPostLimitSeconds);
+
+    $v3aPostRecaptchaV3SiteKey = new \Typecho\Widget\Helper\Form\Element\Text(
+        'v3aPostRecaptchaV3SiteKey',
+        null,
+        '',
+        _t('投稿页 reCAPTCHA v3 Site Key（可选）'),
+        _t('用于投稿页防刷。留空表示关闭。')
+    );
+    $form->addInput($v3aPostRecaptchaV3SiteKey);
+
+    $v3aPostRecaptchaV3SecretKey = new \Typecho\Widget\Helper\Form\Element\Password(
+        'v3aPostRecaptchaV3SecretKey',
+        null,
+        (string) (classic22LinuxDoFallbackConfig()['v3aPostRecaptchaV3SecretKey'] ?? ''),
+        _t('投稿页 reCAPTCHA v3 Secret Key（可选）'),
+        _t('服务端使用。留空将保留已保存的 Key；如需关闭，请清空 Site Key。')
+    );
+    $form->addInput($v3aPostRecaptchaV3SecretKey);
+
+    $v3aPostAiPrompt = new \Typecho\Widget\Helper\Form\Element\Textarea(
+        'v3aPostAiPrompt',
+        null,
+        "你是博客投稿内容生成助手。你将得到一个网页链接，以及从网页解析出的标题/作者/描述/正文文本。\n请基于这些信息生成一篇用于本站发布的投稿文章，并只返回严格 JSON（不要代码块、不要附加文字）。\n\nJSON 格式：\n{\n  \"title\": \"\",\n  \"content\": \"\",\n  \"project_link\": \"\",\n  \"project_type\": \"typecho|halo\",\n  \"project_author\": \"\"\n}\n\n要求：\n- 禁止编造不存在的功能、数据、作者信息；不确定的字段请返回空字符串。\n- title：简短明确（<=60字）。\n- project_link：必须是有效 URL，优先项目主页/仓库地址；否则使用原始链接。\n- project_type：只能是 typecho 或 halo；无法判断则根据内容关键词推断，仍不确定则留空。\n- content：使用 Markdown，包含：简介、主要特性、安装/使用、相关链接（至少包含 project_link）。",
+        _t('投稿 AI 内容生成提示词'),
+        _t('用于投稿页「输入链接 → 解析网页 → AI 生成内容」。留空则使用内置默认提示词。')
+    );
+    $form->addInput($v3aPostAiPrompt);
+
     $liveWsEnabled = new \Typecho\Widget\Helper\Form\Element\Select(
         'liveWsEnabled',
         [
@@ -551,6 +587,10 @@ function classic22LinuxDoExtractSettingsFromRequest(): array
         'linuxDoClientId',
         'linuxDoClientSecret',
         'linuxDoCommentEnabled',
+        'v3aPostLimitSeconds',
+        'v3aPostRecaptchaV3SiteKey',
+        'v3aPostRecaptchaV3SecretKey',
+        'v3aPostAiPrompt',
         'liveWsEnabled',
         'liveWsEndpoint',
         'aiEnabled',
@@ -614,7 +654,7 @@ function themeConfigHandle(array $settings, bool $isInit)
     classic22LinuxDoThemeConfig(true);
 
     $fallbackConfig = classic22LinuxDoFallbackConfig();
-    $secretKeys = ['linuxDoClientId', 'linuxDoClientSecret', 'aiApiKey'];
+    $secretKeys = ['linuxDoClientId', 'linuxDoClientSecret', 'aiApiKey', 'v3aPostRecaptchaV3SecretKey'];
 
     foreach ($secretKeys as $secretKey) {
         if (!array_key_exists($secretKey, $mergedSettings)) {
@@ -624,7 +664,7 @@ function themeConfigHandle(array $settings, bool $isInit)
         $newValue = trim((string) $mergedSettings[$secretKey]);
 
         if (
-            in_array($secretKey, ['linuxDoClientSecret', 'aiApiKey'], true)
+            in_array($secretKey, ['linuxDoClientSecret', 'aiApiKey', 'v3aPostRecaptchaV3SecretKey'], true)
             && $newValue === ''
             && isset($fallbackConfig[$secretKey])
             && trim((string) $fallbackConfig[$secretKey]) !== ''
