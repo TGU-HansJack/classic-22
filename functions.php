@@ -681,6 +681,14 @@ function themeConfigHandle(array $settings, bool $isInit)
 function classic22LinuxDoGetOption($options, string $key, string $default = ''): string
 {
     if (!is_object($options)) {
+        $themeConfig = classic22LinuxDoThemeConfig();
+        if (isset($themeConfig[$key]) && !is_array($themeConfig[$key]) && !is_object($themeConfig[$key])) {
+            $value = trim((string) $themeConfig[$key]);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
         $fallback = classic22LinuxDoFallbackConfig();
         if (isset($fallback[$key]) && !is_array($fallback[$key]) && !is_object($fallback[$key])) {
             $value = trim((string) $fallback[$key]);
@@ -1134,6 +1142,7 @@ function classic22LinuxDoHttpRequest(string $url, string $method = 'GET', string
     curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
     curl_setopt($ch, CURLOPT_TIMEOUT, 20);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+    curl_setopt($ch, CURLOPT_ENCODING, '');
 
     if (!empty($headers)) {
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -1401,7 +1410,7 @@ function postMeta(
                 <li class="feather-folder"><?php $archive->category(', '); ?></li>
                 <li class="feather-message"><a href="<?php $archive->permalink() ?>#comments"  itemprop="discussionUrl"><?php $archive->commentsNum(_t('暂无评论'), _t('1 条评论'), _t('%d 条评论')); ?></a></li>
             </ul>
-            <div class="classic22-live-online-badge" data-live-online-card data-page-path="<?php echo htmlspecialchars($postPath, ENT_QUOTES, $archive->options->charset); ?>" data-online-count="0" aria-label="在线人数">
+            <div class="classic22-live-online-badge" data-live-online-card data-page-path="<?php echo htmlspecialchars($postPath, ENT_QUOTES, classic22ArchiveCharset($archive)); ?>" data-online-count="0" aria-label="在线人数">
                 <span class="classic22-live-online-icon" aria-hidden="true">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-activity-icon lucide-activity"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>
                 </span>
@@ -1434,11 +1443,11 @@ function postCoverUrl(\Widget\Archive $archive): ?string
     }
 
     if (preg_match('/<img[^>]+(?:data-src|data-original|data-lazy-src)=[\'"]([^\'"]+)[\'"]/i', $html, $matches)) {
-        return html_entity_decode($matches[1], ENT_QUOTES, $archive->options->charset);
+        return html_entity_decode($matches[1], ENT_QUOTES, classic22ArchiveCharset($archive));
     }
 
     if (preg_match('/<img[^>]+src=[\'"]([^\'"]+)[\'"]/i', $html, $matches)) {
-        $src = html_entity_decode($matches[1], ENT_QUOTES, $archive->options->charset);
+        $src = html_entity_decode($matches[1], ENT_QUOTES, classic22ArchiveCharset($archive));
 
         if (strpos($src, 'data:') === 0) {
             return null;
@@ -1453,11 +1462,15 @@ function postCoverUrl(\Widget\Archive $archive): ?string
 function classic22ArchiveCharset($archive): string
 {
     try {
-        $charset = (string) ($archive->options->charset ?? 'UTF-8');
-        return $charset !== '' ? $charset : 'UTF-8';
+        if (class_exists('\\Widget\\Options')) {
+            $options = \Widget\Options::alloc();
+            $charset = trim((string) ($options->charset ?? 'UTF-8'));
+            return $charset !== '' ? $charset : 'UTF-8';
+        }
     } catch (\Throwable $exception) {
-        return 'UTF-8';
     }
+
+    return 'UTF-8';
 }
 
 function postExcerptText($archive, int $length = 140, string $trim = '...'): string
@@ -2762,7 +2775,7 @@ function classic22TimelineAiRewriteSummaries(\Widget\Archive $archive, array $ev
         return $events;
     }
 
-    $decoded = json_decode((string) ($response['body'] ?? ''), true);
+    $decoded = classic22AiDecodeJsonBody((string) ($response['body'] ?? ''));
     if (!is_array($decoded)) {
         return $events;
     }
@@ -3227,12 +3240,8 @@ function classic22AiBuildResponsesInput(array $messages): array
     }
 
     return [[
-        'type' => 'message',
         'role' => 'user',
-        'content' => [[
-            'type' => 'input_text',
-            'text' => $userText,
-        ]],
+        'content' => $userText,
     ]];
 }
 
@@ -3299,11 +3308,10 @@ function classic22AiBuildResponsesInstructions(array $messages): string
 function classic22AiBuildResponsesPayload(string $model, array $messages): ?string
 {
     $input = classic22AiBuildResponsesInput($messages);
-    $inputText = classic22AiBuildResponsesUserInput($messages);
 
     $payloadArray = [
         'model' => $model,
-        'input' => $inputText,
+        'input' => $input,
         'stream' => false,
     ];
 
@@ -3330,6 +3338,16 @@ function classic22AiExtractTextFromResponsesOutput(array $decoded): string
         }
     }
 
+    foreach (['data', 'response'] as $key) {
+        $nested = $decoded[$key] ?? null;
+        if (is_array($nested)) {
+            $nestedText = classic22AiExtractTextFromResponsesOutput($nested);
+            if ($nestedText !== '') {
+                return $nestedText;
+            }
+        }
+    }
+
     $output = $decoded['output'] ?? null;
     if (!is_array($output)) {
         return '';
@@ -3342,16 +3360,59 @@ function classic22AiExtractTextFromResponsesOutput(array $decoded): string
         }
 
         $content = $item['content'] ?? null;
+        if (is_string($content)) {
+            $text = trim($content);
+            if ($text !== '') {
+                $texts[] = $text;
+            }
+            continue;
+        }
+
         if (!is_array($content)) {
+            $message = $item['message'] ?? null;
+            if (is_array($message) && isset($message['content'])) {
+                $mc = $message['content'];
+                if (is_string($mc)) {
+                    $text = trim($mc);
+                    if ($text !== '') {
+                        $texts[] = $text;
+                    }
+                } elseif (is_array($mc)) {
+                    foreach ($mc as $part) {
+                        if (is_array($part) && isset($part['text']) && is_string($part['text'])) {
+                            $text = trim((string) $part['text']);
+                            if ($text !== '') {
+                                $texts[] = $text;
+                            }
+                        }
+                    }
+                }
+            }
             continue;
         }
 
         foreach ($content as $contentItem) {
+            if (is_string($contentItem)) {
+                $text = trim($contentItem);
+                if ($text !== '') {
+                    $texts[] = $text;
+                }
+                continue;
+            }
+
             if (!is_array($contentItem)) {
                 continue;
             }
 
-            $text = trim((string) ($contentItem['text'] ?? ''));
+            $rawText = $contentItem['text'] ?? '';
+            if (is_array($rawText) && isset($rawText['value']) && is_string($rawText['value'])) {
+                $rawText = $rawText['value'];
+            }
+            if (!is_string($rawText)) {
+                $rawText = (string) ($contentItem['content'] ?? '');
+            }
+
+            $text = trim((string) $rawText);
             if ($text !== '') {
                 $texts[] = $text;
             }
@@ -3370,7 +3431,22 @@ function classic22AiExtractAnswerByMode(array $decoded, string $mode): string
         }
     }
 
-    return classic22AiExtractTextFromResponse($decoded);
+    $text = classic22AiExtractTextFromResponse($decoded);
+    if ($text !== '') {
+        return $text;
+    }
+
+    foreach (['data', 'response'] as $key) {
+        $nested = $decoded[$key] ?? null;
+        if (is_array($nested)) {
+            $nestedText = classic22AiExtractAnswerByMode($nested, $mode);
+            if ($nestedText !== '') {
+                return $nestedText;
+            }
+        }
+    }
+
+    return '';
 }
 
 function classic22AiRequest(string $apiUrl, string $payload, string $apiKey): array
@@ -3388,9 +3464,134 @@ function classic22AiRequest(string $apiUrl, string $payload, string $apiKey): ar
     );
 }
 
+function classic22AiDecodeJsonBody(string $raw): ?array
+{
+    $rawString = (string) $raw;
+    if (function_exists('gzdecode') && strlen($rawString) >= 2 && ord($rawString[0]) === 0x1f && ord($rawString[1]) === 0x8b) {
+        $decodedGzip = @gzdecode($rawString);
+        if (is_string($decodedGzip) && $decodedGzip !== '') {
+            $rawString = $decodedGzip;
+        }
+    }
+
+    $text = ltrim($rawString);
+    if ($text === '') {
+        return null;
+    }
+
+    if (strncmp($text, "\xEF\xBB\xBF", 3) === 0) {
+        $text = ltrim(substr($text, 3));
+    }
+
+    if (strncmp($text, ")]}'", 4) === 0) {
+        $text = ltrim(substr($text, 4));
+    }
+
+    $decoded = json_decode($text, true);
+    if (is_array($decoded)) {
+        return $decoded;
+    }
+
+    if (strpos($text, 'data:') !== false) {
+        $lines = preg_split("/\r\n|\n|\r/", $text);
+        if (is_array($lines)) {
+            $candidates = [];
+            foreach ($lines as $line) {
+                $line = trim((string) $line);
+                if ($line === '' || stripos($line, 'data:') !== 0) {
+                    continue;
+                }
+
+                $payload = trim(substr($line, 5));
+                if ($payload === '' || $payload === '[DONE]') {
+                    continue;
+                }
+
+                $candidates[] = $payload;
+            }
+
+            for ($i = count($candidates) - 1; $i >= 0; $i--) {
+                $decoded = json_decode((string) $candidates[$i], true);
+                if (is_array($decoded)) {
+                    return $decoded;
+                }
+            }
+        }
+    }
+
+    $first = strpos($text, '{');
+    $last = strrpos($text, '}');
+    if ($first !== false && $last !== false && $last > $first) {
+        $snippet = substr($text, $first, $last - $first + 1);
+        $decoded = json_decode((string) $snippet, true);
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+    }
+
+    $first = strpos($text, '[');
+    $last = strrpos($text, ']');
+    if ($first !== false && $last !== false && $last > $first) {
+        $snippet = substr($text, $first, $last - $first + 1);
+        $decoded = json_decode((string) $snippet, true);
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+    }
+
+    return null;
+}
+
+function classic22AiExtractErrorMessageFromDecoded($decoded): string
+{
+    if (!is_array($decoded)) {
+        return '';
+    }
+
+    $error = $decoded['error'] ?? null;
+    if (is_string($error)) {
+        $msg = trim($error);
+        if ($msg !== '') {
+            return $msg;
+        }
+    }
+
+    if (is_array($error)) {
+        foreach (['message', 'detail', 'error_description'] as $key) {
+            if (isset($error[$key]) && is_string($error[$key])) {
+                $msg = trim((string) $error[$key]);
+                if ($msg !== '') {
+                    return $msg;
+                }
+            }
+        }
+    }
+
+    foreach (['message', 'detail', 'error_description'] as $key) {
+        if (isset($decoded[$key]) && is_string($decoded[$key])) {
+            $msg = trim((string) $decoded[$key]);
+            if ($msg !== '') {
+                return $msg;
+            }
+        }
+    }
+
+    $errors = $decoded['errors'] ?? null;
+    if (is_array($errors) && !empty($errors[0]) && is_array($errors[0]) && isset($errors[0]['message']) && is_string($errors[0]['message'])) {
+        $msg = trim((string) $errors[0]['message']);
+        if ($msg !== '') {
+            return $msg;
+        }
+    }
+
+    return '';
+}
+
 function classic22AiExtractRemoteErrorMessage(array $response): string
 {
-    $body = json_decode((string) ($response['body'] ?? ''), true);
+    $body = function_exists('classic22AiDecodeJsonBody')
+        ? classic22AiDecodeJsonBody((string) ($response['body'] ?? ''))
+        : json_decode((string) ($response['body'] ?? ''), true);
     if (is_array($body) && isset($body['error']) && is_array($body['error']) && isset($body['error']['message'])) {
         return trim((string) $body['error']['message']);
     }
@@ -3932,7 +4133,7 @@ function classic22AiHandleRequest($archive): void
         ], $status);
     }
 
-    $decoded = json_decode((string) ($response['body'] ?? ''), true);
+    $decoded = classic22AiDecodeJsonBody((string) ($response['body'] ?? ''));
     if (!is_array($decoded)) {
         classic22AiSendJson([
             'ok' => false,
@@ -3940,7 +4141,36 @@ function classic22AiHandleRequest($archive): void
         ], 502);
     }
 
+    $decodedError = classic22AiExtractErrorMessageFromDecoded($decoded);
+    if ($decodedError !== '') {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => classic22AiNormalizeRemoteError($decodedError),
+        ], classic22AiIsRegionBlockedError($decodedError) ? 403 : 502);
+    }
+
     $answer = classic22AiExtractAnswerByMode($decoded, $mode);
+    if ($answer === '' && $mode === 'responses') {
+        $fallbackApiUrl = $baseUrl . '/chat/completions';
+        $fallbackPayload = classic22AiBuildChatCompletionsPayload($model, $messages);
+        if (is_string($fallbackPayload) && trim($fallbackPayload) !== '') {
+            $fallbackResponse = classic22AiRequest($fallbackApiUrl, $fallbackPayload, $apiKey);
+            if (!empty($fallbackResponse['ok'])) {
+                $fallbackDecoded = classic22AiDecodeJsonBody((string) ($fallbackResponse['body'] ?? ''));
+                if (is_array($fallbackDecoded) && classic22AiExtractErrorMessageFromDecoded($fallbackDecoded) === '') {
+                    $fallbackAnswer = classic22AiExtractAnswerByMode($fallbackDecoded, 'chat_completions');
+                    if ($fallbackAnswer !== '') {
+                        classic22AiSendJson([
+                            'ok' => true,
+                            'answer' => $fallbackAnswer,
+                            'model' => $model,
+                        ]);
+                    }
+                }
+            }
+        }
+    }
+
     if ($answer === '') {
         classic22AiSendJson([
             'ok' => false,

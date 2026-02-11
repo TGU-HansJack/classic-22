@@ -9,6 +9,18 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
     exit;
 }
 
+// Ensure theme functions are available even when Archive is invoked from outside.
+if (
+    !function_exists('classic22LinuxDoGetOption')
+    || !function_exists('classic22AiRequest')
+    || !function_exists('classic22AiExtractAnswerByMode')
+) {
+    $v3aPostThemeFunctions = __DIR__ . DIRECTORY_SEPARATOR . 'functions.php';
+    if (is_file($v3aPostThemeFunctions)) {
+        require_once $v3aPostThemeFunctions;
+    }
+}
+
 if (!function_exists('v3aPostH')) {
     function v3aPostH($value, string $charset = 'UTF-8'): string
     {
@@ -59,6 +71,59 @@ if (!function_exists('v3aPostPreview')) {
             return $text;
         }
         return rtrim(v3aPostSubstr($text, $max)) . '…';
+    }
+}
+
+if (!function_exists('v3aPostRenderMarkdown')) {
+    function v3aPostRenderMarkdown(string $markdown, string $charset = 'UTF-8'): string
+    {
+        $markdown = trim((string) $markdown);
+        if ($markdown === '') {
+            return '';
+        }
+
+        $html = '';
+        try {
+            if (class_exists('\\Utils\\Markdown') && method_exists('\\Utils\\Markdown', 'convert')) {
+                $html = (string) \Utils\Markdown::convert($markdown);
+            }
+        } catch (\Throwable $e) {
+            $html = '';
+        }
+
+        if (trim($html) === '') {
+            return nl2br(v3aPostH($markdown, $charset));
+        }
+
+        $allowed = '<h1><h2><h3><h4><h5><h6>'
+            . '<p><br>'
+            . '<strong><b><em><i><del>'
+            . '<blockquote><pre><code class="">' 
+            . '<ul><ol><li><hr>'
+            . '<a href="">';
+
+        try {
+            if (class_exists('\\Typecho\\Common') && method_exists('\\Typecho\\Common', 'stripTags')) {
+                $html = (string) \Typecho\Common::stripTags($html, $allowed);
+            } else {
+                $html = strip_tags($html);
+            }
+        } catch (\Throwable $e) {
+            $html = strip_tags($html);
+        }
+
+        if (class_exists('\\Typecho\\Common') && method_exists('\\Typecho\\Common', 'safeUrl')) {
+            $html = preg_replace_callback(
+                '/\shref=(\"|\')([^\"\']*)(\\1)/i',
+                static function (array $match) use ($charset): string {
+                    $safe = \Typecho\Common::safeUrl((string) ($match[2] ?? ''));
+                    return ' href="' . htmlspecialchars($safe, ENT_QUOTES, $charset) . '"';
+                },
+                (string) $html
+            );
+        }
+
+        return (string) $html;
     }
 }
 
@@ -328,19 +393,45 @@ if (!function_exists('v3aPostBuildSchema')) {
 if (!function_exists('v3aPostIsAdmin')) {
     function v3aPostIsAdmin($archive): bool
     {
-        if (!is_object($archive) || !isset($archive->user) || !is_object($archive->user)) {
+        $user = null;
+        if (is_object($archive)) {
+            try {
+                $candidate = $archive->user ?? null;
+                if (is_object($candidate)) {
+                    $user = $candidate;
+                }
+            } catch (\Throwable $e) {
+                $user = null;
+            }
+        }
+
+        if (!is_object($user)) {
+            try {
+                $user = \Widget\User::alloc();
+            } catch (\Throwable $e) {
+                $user = null;
+            }
+        }
+
+        if (!is_object($user) || !method_exists($user, 'hasLogin') || !$user->hasLogin()) {
             return false;
         }
-        if (!method_exists($archive->user, 'hasLogin') || !$archive->user->hasLogin()) {
-            return false;
-        }
+
         try {
-            if (method_exists($archive->user, 'pass') && $archive->user->pass('administrator', true)) {
+            if (method_exists($user, 'pass') && ($user->pass('administrator', true) || $user->pass('editor', true))) {
                 return true;
             }
         } catch (\Throwable $e) {
         }
-        return strtolower(trim((string) ($archive->user->group ?? ''))) === 'administrator';
+
+        $group = '';
+        try {
+            $group = strtolower(trim((string) ($user->group ?? '')));
+        } catch (\Throwable $e) {
+            $group = '';
+        }
+
+        return in_array($group, ['administrator', 'editor'], true);
     }
 }
 
@@ -724,16 +815,38 @@ if (!function_exists('v3aPostRedirectWithNotice')) {
     }
 }
 
+if (!function_exists('v3aPostGetOptionsWidget')) {
+    function v3aPostGetOptionsWidget()
+    {
+        try {
+            if (class_exists('\\Widget\\Options')) {
+                return \Widget\Options::alloc();
+            }
+        } catch (\Throwable $e) {
+        }
+
+        try {
+            if (class_exists('Widget_Options')) {
+                return \Widget_Options::alloc();
+            }
+        } catch (\Throwable $e) {
+        }
+
+        return null;
+    }
+}
+
 if (!function_exists('v3aPostGetThemeOption')) {
     function v3aPostGetThemeOption($archive, string $key, string $default = ''): string
     {
-        if (function_exists('classic22LinuxDoGetOption') && is_object($archive) && isset($archive->options)) {
-            return (string) classic22LinuxDoGetOption($archive->options, $key, $default);
+        $options = v3aPostGetOptionsWidget();
+        if (function_exists('classic22LinuxDoGetOption') && is_object($options)) {
+            return (string) classic22LinuxDoGetOption($options, $key, $default);
         }
 
-        if (is_object($archive) && isset($archive->options) && is_object($archive->options)) {
+        if (is_object($options)) {
             try {
-                $value = $archive->options->{$key};
+                $value = $options->{$key};
                 if ($value !== null && !is_array($value) && !is_object($value)) {
                     $normalized = trim((string) $value);
                     if ($normalized !== '') {
@@ -1463,49 +1576,9 @@ if (!function_exists('v3aPostGuessProjectType')) {
 if (!function_exists('v3aPostAiGenerate')) {
     function v3aPostAiGenerate($archive, string $sourceUrl, array $pageInfo): array
     {
-        if (!function_exists('classic22LinuxDoGetOption')) {
-            return ['ok' => false, 'message' => '主题未启用 AI 能力。', 'data' => []];
-        }
+        $options = function_exists('v3aPostGetOptionsWidget') ? v3aPostGetOptionsWidget() : null;
 
-        $apiKey = trim((string) classic22LinuxDoGetOption($archive->options, 'aiApiKey', ''));
-        if ($apiKey === '') {
-            return ['ok' => false, 'message' => '请先在主题设置中配置 AI API Key。', 'data' => []];
-        }
-
-        if (
-            !function_exists('classic22AiSanitizeBaseUrl')
-            || !function_exists('classic22AiResolveApiMode')
-            || !function_exists('classic22AiBuildChatCompletionsPayload')
-            || !function_exists('classic22AiBuildResponsesPayload')
-            || !function_exists('classic22AiDefaultModel')
-            || !function_exists('classic22AiRequest')
-            || !function_exists('classic22AiExtractAnswerByMode')
-        ) {
-            return ['ok' => false, 'message' => '主题 AI 组件不完整，请更新主题文件。', 'data' => []];
-        }
-
-        $provider = strtolower(trim((string) classic22LinuxDoGetOption($archive->options, 'aiProvider', 'openai')));
-        if (!in_array($provider, ['openai', 'rightcode'], true)) {
-            $provider = 'openai';
-        }
-
-        $baseUrl = classic22AiSanitizeBaseUrl((string) classic22LinuxDoGetOption($archive->options, 'aiApiBaseUrl', 'https://api.openai.com/v1'), $provider);
-        if ($provider === 'rightcode') {
-            $baseLower = strtolower($baseUrl);
-            if ($baseLower === '' || strpos($baseLower, 'api.openai.com') !== false) {
-                $baseUrl = 'https://www.right.codes/codex/v1';
-            }
-        }
-
-        $mode = classic22AiResolveApiMode($archive->options);
-        if ($provider === 'rightcode' && $mode !== 'responses') {
-            $mode = 'responses';
-        }
-
-        $model = classic22AiDefaultModel($archive->options);
-        $apiUrl = rtrim($baseUrl, '/') . ($mode === 'responses' ? '/responses' : '/chat/completions');
-
-        $prompt = trim((string) classic22LinuxDoGetOption($archive->options, 'v3aPostAiPrompt', ''));
+        $prompt = trim((string) v3aPostGetThemeOption($archive, 'v3aPostAiPrompt', ''));
         if ($prompt === '') {
             $prompt = v3aPostDefaultAiPrompt();
         }
@@ -1523,31 +1596,191 @@ if (!function_exists('v3aPostAiGenerate')) {
             ['role' => 'user', 'content' => '请根据以下网页信息生成投稿内容：' . json_encode($seed, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)],
         ];
 
-        $payload = $mode === 'responses'
-            ? classic22AiBuildResponsesPayload($model, $messages)
-            : classic22AiBuildChatCompletionsPayload($model, $messages);
+        $answer = '';
 
-        if (!is_string($payload) || trim($payload) === '') {
-            return ['ok' => false, 'message' => 'AI 请求体生成失败。', 'data' => []];
+        $themeApiKey = trim((string) v3aPostGetThemeOption($archive, 'aiApiKey', ''));
+        $themeMissing = [];
+        foreach ([
+            'classic22AiSanitizeBaseUrl',
+            'classic22AiResolveApiMode',
+            'classic22AiBuildChatCompletionsPayload',
+            'classic22AiBuildResponsesPayload',
+            'classic22AiDefaultModel',
+            'classic22AiRequest',
+            'classic22AiExtractAnswerByMode',
+        ] as $fn) {
+            if (!function_exists($fn)) {
+                $themeMissing[] = $fn;
+            }
         }
+        $themeAiReady = $themeApiKey !== '' && $options !== null && empty($themeMissing);
 
-        $response = classic22AiRequest($apiUrl, $payload, $apiKey);
-        if (empty($response['ok'])) {
-            $remoteMsg = function_exists('classic22AiExtractRemoteErrorMessage')
-                ? classic22AiExtractRemoteErrorMessage($response)
-                : '';
-            $message = $remoteMsg !== '' ? $remoteMsg : ('AI 请求失败（' . (int) ($response['status'] ?? 0) . '）');
-            return ['ok' => false, 'message' => $message, 'data' => []];
-        }
+        if ($themeAiReady) {
+            $provider = strtolower(trim((string) v3aPostGetThemeOption($archive, 'aiProvider', 'openai')));
+            if (!in_array($provider, ['openai', 'rightcode'], true)) {
+                $provider = 'openai';
+            }
 
-        $decoded = json_decode((string) ($response['body'] ?? ''), true);
-        if (!is_array($decoded)) {
-            return ['ok' => false, 'message' => 'AI 返回格式无效。', 'data' => []];
-        }
+            $baseUrl = classic22AiSanitizeBaseUrl((string) v3aPostGetThemeOption($archive, 'aiApiBaseUrl', 'https://api.openai.com/v1'), $provider);
+            if ($provider === 'rightcode') {
+                $baseLower = strtolower($baseUrl);
+                if ($baseLower === '' || strpos($baseLower, 'api.openai.com') !== false) {
+                    $baseUrl = 'https://www.right.codes/codex/v1';
+                }
+            }
 
-        $answer = trim(classic22AiExtractAnswerByMode($decoded, $mode));
-        if ($answer === '') {
-            return ['ok' => false, 'message' => 'AI 未返回有效内容。', 'data' => []];
+            $mode = classic22AiResolveApiMode($options);
+            if ($provider === 'rightcode' && $mode !== 'responses') {
+                $mode = 'responses';
+            }
+
+            $model = classic22AiDefaultModel($options);
+            $apiUrl = rtrim($baseUrl, '/') . ($mode === 'responses' ? '/responses' : '/chat/completions');
+
+            $payload = $mode === 'responses'
+                ? classic22AiBuildResponsesPayload($model, $messages)
+                : classic22AiBuildChatCompletionsPayload($model, $messages);
+
+            if (!is_string($payload) || trim($payload) === '') {
+                return ['ok' => false, 'message' => 'AI 请求体生成失败。', 'data' => []];
+            }
+
+            $response = classic22AiRequest($apiUrl, $payload, $themeApiKey);
+            if (empty($response['ok'])) {
+                $remoteMsg = function_exists('classic22AiExtractRemoteErrorMessage')
+                    ? classic22AiExtractRemoteErrorMessage($response)
+                    : '';
+                $message = $remoteMsg !== '' ? $remoteMsg : ('AI 请求失败（' . (int) ($response['status'] ?? 0) . '）');
+                return ['ok' => false, 'message' => $message, 'data' => []];
+            }
+
+            $decoded = function_exists('classic22AiDecodeJsonBody')
+                ? classic22AiDecodeJsonBody((string) ($response['body'] ?? ''))
+                : json_decode((string) ($response['body'] ?? ''), true);
+            if (!is_array($decoded)) {
+                $message = 'AI 返回格式无效。';
+                if (function_exists('v3aPostIsAdmin') && v3aPostIsAdmin($archive) && function_exists('classic22AiResponseBodyExcerpt')) {
+                    $excerpt = classic22AiResponseBodyExcerpt($response, 240);
+                    if ($excerpt !== '') {
+                        $message .= '（' . $excerpt . '）';
+                    }
+                }
+                return ['ok' => false, 'message' => $message, 'data' => []];
+            }
+
+            if (function_exists('classic22AiExtractErrorMessageFromDecoded')) {
+                $decodedError = trim((string) classic22AiExtractErrorMessageFromDecoded($decoded));
+                if ($decodedError !== '') {
+                    if (function_exists('classic22AiNormalizeRemoteError')) {
+                        $decodedError = classic22AiNormalizeRemoteError($decodedError);
+                    }
+                    return ['ok' => false, 'message' => $decodedError, 'data' => []];
+                }
+            }
+
+            $answer = trim(classic22AiExtractAnswerByMode($decoded, $mode));
+            if ($answer === '' && $mode === 'responses' && function_exists('classic22AiBuildChatCompletionsPayload')) {
+                $fallbackApiUrl = rtrim($baseUrl, '/') . '/chat/completions';
+                $fallbackPayload = classic22AiBuildChatCompletionsPayload($model, $messages);
+                if (is_string($fallbackPayload) && trim($fallbackPayload) !== '') {
+                    $fallbackResponse = classic22AiRequest($fallbackApiUrl, $fallbackPayload, $themeApiKey);
+                    if (!empty($fallbackResponse['ok'])) {
+                        $fallbackDecoded = function_exists('classic22AiDecodeJsonBody')
+                            ? classic22AiDecodeJsonBody((string) ($fallbackResponse['body'] ?? ''))
+                            : json_decode((string) ($fallbackResponse['body'] ?? ''), true);
+                        if (is_array($fallbackDecoded) && function_exists('classic22AiExtractErrorMessageFromDecoded')) {
+                            $fallbackError = trim((string) classic22AiExtractErrorMessageFromDecoded($fallbackDecoded));
+                            if ($fallbackError !== '') {
+                                if (function_exists('classic22AiNormalizeRemoteError')) {
+                                    $fallbackError = classic22AiNormalizeRemoteError($fallbackError);
+                                }
+                                return ['ok' => false, 'message' => $fallbackError, 'data' => []];
+                            }
+                        }
+
+                        if (is_array($fallbackDecoded)) {
+                            $fallbackAnswer = trim(classic22AiExtractAnswerByMode($fallbackDecoded, 'chat_completions'));
+                            if ($fallbackAnswer !== '') {
+                                $answer = $fallbackAnswer;
+                            }
+                        }
+                    }
+                }
+            }
+            if ($answer === '') {
+                return ['ok' => false, 'message' => 'AI 未返回有效内容。', 'data' => []];
+            }
+        } elseif ($themeApiKey !== '') {
+            $reason = [];
+            if ($options === null) {
+                $reason[] = 'options 未加载';
+            }
+            if (!empty($themeMissing)) {
+                $reason[] = '缺少函数：' . implode(', ', $themeMissing);
+            }
+            $detail = !empty($reason) ? ('（' . implode('；', $reason) . '）') : '';
+            return ['ok' => false, 'message' => '主题 AI 组件未就绪' . $detail . '。', 'data' => []];
+        } else {
+            $vue3AdminApiKey = '';
+            try {
+                $vue3AdminApiKey = trim((string) (($options !== null ? ($options->v3a_ai_api_key ?? '') : '') ?? ''));
+            } catch (\Throwable $e) {
+                $vue3AdminApiKey = '';
+            }
+
+            if ($vue3AdminApiKey === '') {
+                return ['ok' => false, 'message' => '未配置 AI API Key，将仅使用基础解析生成内容。', 'data' => []];
+            }
+
+            $aiClass = '\\TypechoPlugin\\Vue3Admin\\Ai';
+            if (!class_exists($aiClass)) {
+                $aiFile = '';
+                if (defined('__TYPECHO_ROOT_DIR__')) {
+                    $candidate = rtrim((string) __TYPECHO_ROOT_DIR__, DIRECTORY_SEPARATOR)
+                        . DIRECTORY_SEPARATOR . 'usr' . DIRECTORY_SEPARATOR . 'plugins' . DIRECTORY_SEPARATOR . 'Vue3Admin' . DIRECTORY_SEPARATOR . 'Ai.php';
+                    if (is_file($candidate)) {
+                        $aiFile = $candidate;
+                    }
+                }
+                if ($aiFile === '') {
+                    $candidate = dirname(__DIR__, 3)
+                        . DIRECTORY_SEPARATOR . 'usr' . DIRECTORY_SEPARATOR . 'plugins' . DIRECTORY_SEPARATOR . 'Vue3Admin' . DIRECTORY_SEPARATOR . 'Ai.php';
+                    if (is_file($candidate)) {
+                        $aiFile = $candidate;
+                    }
+                }
+                if ($aiFile !== '' && defined('__TYPECHO_ROOT_DIR__')) {
+                    require_once $aiFile;
+                }
+            }
+
+            if (!class_exists($aiClass)) {
+                return ['ok' => false, 'message' => '未找到 Vue3Admin AI 组件，请确认插件已安装。', 'data' => []];
+            }
+
+            $cfg = [];
+            try {
+                $cfg = $aiClass::getRuntimeConfig($options);
+            } catch (\Throwable $e) {
+                $cfg = [];
+            }
+            if (!is_array($cfg)) {
+                $cfg = [];
+            }
+            $cfg['enabled'] = 1;
+            $cfg['apiKey'] = $vue3AdminApiKey;
+
+            try {
+                $chat = $aiClass::chat($cfg, $messages);
+            } catch (\Throwable $e) {
+                $msg = trim((string) $e->getMessage());
+                return ['ok' => false, 'message' => $msg !== '' ? $msg : 'AI 请求失败。', 'data' => []];
+            }
+
+            $answer = trim((string) ($chat['content'] ?? ''));
+            if ($answer === '') {
+                return ['ok' => false, 'message' => 'AI 未返回有效内容。', 'data' => []];
+            }
         }
 
         if (preg_match('/```(?:json)?\\s*(\\{.*\\})\\s*```/is', $answer, $match)) {
@@ -1608,11 +1841,44 @@ $previewSchemas = array_values(array_filter($schemas, static function (array $sc
     return in_array($name, ['source_url', 'title', 'project_type', 'project_author', 'project_link'], true);
 }));
 
-$limitSeconds = max(0, (int) v3aPostGetThemeOption($this, 'v3aPostLimitSeconds', '60'));
-$recaptchaId = trim(v3aPostGetThemeOption($this, 'v3aPostRecaptchaV3SiteKey', ''));
-$recaptchaKey = trim(v3aPostGetThemeOption($this, 'v3aPostRecaptchaV3SecretKey', ''));
-$recaptchaEnabled = $recaptchaId !== '' && $recaptchaKey !== '';
-$aiApiKeyConfigured = trim(v3aPostGetThemeOption($this, 'aiApiKey', '')) !== '';
+$legacyRows = v3aPostLoadFields((int) $this->cid, $this->fields ?? null);
+$legacyConfig = v3aPostBuildSchema($legacyRows);
+$legacyLimitSeconds = max(0, (int) ($legacyConfig['limit'] ?? 0));
+$legacyRecaptchaId = trim((string) ($legacyConfig['recaptcha_id'] ?? ''));
+$legacyRecaptchaKey = trim((string) ($legacyConfig['recaptcha_key'] ?? ''));
+
+$themeLimitRaw = trim(v3aPostGetThemeOption($this, 'v3aPostLimitSeconds', ''));
+if ($themeLimitRaw !== '') {
+    $limitSeconds = max(0, (int) $themeLimitRaw);
+} else {
+    $limitSeconds = $legacyLimitSeconds > 0 ? $legacyLimitSeconds : 60;
+}
+
+$themeRecaptchaId = trim(v3aPostGetThemeOption($this, 'v3aPostRecaptchaV3SiteKey', ''));
+$themeRecaptchaKey = trim(v3aPostGetThemeOption($this, 'v3aPostRecaptchaV3SecretKey', ''));
+$recaptchaId = $themeRecaptchaId !== '' ? $themeRecaptchaId : $legacyRecaptchaId;
+$recaptchaKey = $themeRecaptchaKey !== '' ? $themeRecaptchaKey : $legacyRecaptchaKey;
+$recaptchaSiteEnabled = $recaptchaId !== '';
+$recaptchaVerifyEnabled = $recaptchaSiteEnabled && $recaptchaKey !== '';
+
+$aiSource = '';
+$themeAiApiKey = trim(v3aPostGetThemeOption($this, 'aiApiKey', ''));
+if ($themeAiApiKey !== '') {
+    $aiSource = 'theme';
+} else {
+    $vue3AdminApiKey = '';
+    try {
+        $vue3AdminApiKey = trim((string) ($this->options->v3a_ai_api_key ?? ''));
+    } catch (\Throwable $e) {
+        $vue3AdminApiKey = '';
+    }
+
+    if ($vue3AdminApiKey !== '') {
+        $aiSource = 'vue3admin';
+    }
+}
+
+$aiEnabled = $aiSource !== '';
 
 $storeDir = __DIR__ . DIRECTORY_SEPARATOR . 'v3a_post';
 $storeFile = $storeDir . DIRECTORY_SEPARATOR . 'page-' . (int) $this->cid . '.json';
@@ -1685,10 +1951,9 @@ if ($storeReady && isset($_SERVER['REQUEST_METHOD']) && strtoupper((string) $_SE
         }
     } else {
         $entryId = trim((string) ($_POST['entry_id'] ?? ''));
-        $isEdit = $action === 'admin_update';
         $payload = isset($_POST['v3a_post_data']) && is_array($_POST['v3a_post_data']) ? $_POST['v3a_post_data'] : [];
 
-        if ($isEdit) {
+        if ($action === 'admin_update') {
             if (!$isAdmin) {
                 $noticeType = 'error';
                 $noticeMessage = '仅管理员可编辑数据。';
@@ -1727,6 +1992,47 @@ if ($storeReady && isset($_SERVER['REQUEST_METHOD']) && strtoupper((string) $_SE
                     }
                 }
             }
+        } elseif ($action === 'admin_status') {
+            if (!$isAdmin) {
+                $noticeType = 'error';
+                $noticeMessage = '仅管理员可修改审核状态。';
+            } elseif ($entryId === '') {
+                $noticeType = 'error';
+                $noticeMessage = '缺少投稿记录 ID。';
+            } else {
+                $newStatus = trim((string) ($_POST['status'] ?? ''));
+                $allowedStatuses = ['pending', 'approved', 'rejected'];
+                if (!in_array($newStatus, $allowedStatuses, true)) {
+                    $noticeType = 'error';
+                    $noticeMessage = '审核状态无效。';
+                } else {
+                    $found = -1;
+                    foreach ($submissions as $index => $item) {
+                        if ((string) ($item['id'] ?? '') === $entryId) {
+                            $found = (int) $index;
+                            break;
+                        }
+                    }
+
+                    if ($found < 0) {
+                        $noticeType = 'error';
+                        $noticeMessage = '未找到对应投稿记录。';
+                    } else {
+                        $submissions[$found]['status'] = $newStatus;
+                        $submissions[$found]['updated'] = time();
+                        $store['updated_at'] = time();
+                        $store['submissions'] = array_values($submissions);
+                        if (v3aPostStoreSave($storeFile, $store)) {
+                            v3aPostRedirectWithNotice($formAction, 'success', '审核状态已更新。');
+                            $noticeType = 'success';
+                            $noticeMessage = '审核状态已更新。';
+                        } else {
+                            $noticeType = 'error';
+                            $noticeMessage = '写入失败，请检查目录权限。';
+                        }
+                    }
+                }
+            }
         } else {
             if (empty($submitSchemas)) {
                 $noticeType = 'error';
@@ -1758,7 +2064,7 @@ if ($storeReady && isset($_SERVER['REQUEST_METHOD']) && strtoupper((string) $_SE
                             $noticeType = 'error';
                             $noticeMessage = '提交过于频繁，请 ' . $wait . ' 秒后再试。';
                         } else {
-                            if ($recaptchaEnabled) {
+                            if ($recaptchaVerifyEnabled) {
                                 $verify = v3aPostVerifyCaptcha($recaptchaKey, trim((string) ($_POST['recaptcha_token'] ?? '')), $ip);
                                 if (empty($verify['ok'])) {
                                     $noticeType = 'error';
@@ -1783,7 +2089,7 @@ if ($storeReady && isset($_SERVER['REQUEST_METHOD']) && strtoupper((string) $_SE
                                         'project_author' => '',
                                     ];
 
-                                    if ($aiApiKeyConfigured) {
+                                    if ($aiEnabled) {
                                         $aiResult = v3aPostAiGenerate($this, $finalUrl, $pageInfo);
                                         if (empty($aiResult['ok'])) {
                                             $noticeType = 'error';
@@ -1920,9 +2226,40 @@ if ($storeReady && isset($_SERVER['REQUEST_METHOD']) && strtoupper((string) $_SE
 usort($submissions, static function (array $a, array $b): int {
     return (int) ($b['created'] ?? 0) <=> (int) ($a['created'] ?? 0);
 });
-$pending = array_values(array_filter($submissions, static function (array $item): bool {
-    return (string) ($item['status'] ?? 'pending') === 'pending';
-}));
+
+$statusCounts = [
+    'all' => count($submissions),
+    'pending' => 0,
+    'approved' => 0,
+    'rejected' => 0,
+];
+foreach ($submissions as $item) {
+    $status = (string) ($item['status'] ?? 'pending');
+    if (isset($statusCounts[$status])) {
+        $statusCounts[$status]++;
+    }
+}
+
+$allowedStatusFilters = ['all', 'pending', 'approved', 'rejected'];
+$statusFilter = trim((string) ($request->get('v3a_status') ?? ''));
+if ($statusFilter === '' || !in_array($statusFilter, $allowedStatusFilters, true)) {
+    $statusFilter = $isAdmin ? 'pending' : 'all';
+}
+
+$statusFilterLabels = [
+    'all' => '全部',
+    'pending' => '待审核',
+    'approved' => '已通过',
+    'rejected' => '已拒绝',
+];
+$statusFilterLabel = $statusFilterLabels[$statusFilter] ?? $statusFilter;
+
+$displaySubmissions = $submissions;
+if ($statusFilter !== 'all') {
+    $displaySubmissions = array_values(array_filter($submissions, static function (array $item) use ($statusFilter): bool {
+        return (string) ($item['status'] ?? 'pending') === $statusFilter;
+    }));
+}
 
 if (!function_exists('v3aPostRenderField')) {
     function v3aPostRenderField(array $schema, $value, string $name, string $id, string $charset, bool $required = false): void
@@ -1996,6 +2333,11 @@ if (!function_exists('v3aPostRenderField')) {
                     <style>
                         .v3a-post-form-card,.v3a-post-list-card{border:1px solid var(--pico-muted-border-color);border-radius:var(--pico-border-radius);padding:1rem;margin:1rem 0;background:var(--pico-card-background-color)}
                         .v3a-post-form-card h3,.v3a-post-list-card h3{margin:0 0 .75rem}
+                        .v3a-post-list-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;flex-wrap:wrap;margin-bottom:.5rem}
+                        .v3a-post-list-head h3{margin:0}
+                        .v3a-post-status-tabs{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:.55rem 0 .85rem}
+                        .v3a-post-status-tabs a[role="button"]{padding:.25rem .45rem;font-size:.86rem}
+                        .v3a-post-status-tabs a[role="button"].is-active{background:var(--pico-primary-background);border-color:var(--pico-primary-border);color:var(--pico-primary-inverse)}
                         .v3a-post-notice{padding:.7rem .85rem;border:1px solid var(--pico-muted-border-color);border-radius:var(--pico-border-radius);margin-bottom:.85rem}
                         .v3a-post-notice.is-success{border-color:rgba(46,160,67,.45);color:#2ea043}
                         .v3a-post-notice.is-error{border-color:rgba(214,57,57,.45);color:#d63939}
@@ -2014,12 +2356,35 @@ if (!function_exists('v3aPostRenderField')) {
                         .v3a-post-config-tip{margin-top:.75rem;padding:.75rem;border:1px dashed var(--pico-muted-border-color);border-radius:var(--pico-border-radius);color:var(--pico-muted-color);font-size:.92rem;white-space:pre-wrap}
                         .v3a-post-list-item{border-top:1px solid var(--pico-muted-border-color);padding-top:.75rem;margin-top:.75rem}
                         .v3a-post-list-item:first-child{border-top:0;padding-top:0;margin-top:0}
+                        .v3a-post-item-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;flex-wrap:wrap}
                         .v3a-post-item-meta{color:var(--pico-muted-color);font-size:.9rem;margin-bottom:.35rem}
+                        .v3a-post-item-controls{display:flex;align-items:center;justify-content:flex-end;gap:.5rem;flex-wrap:wrap}
+                        .v3a-post-item-controls button,.v3a-post-item-controls a[role="button"],.v3a-post-item-controls select{padding:.25rem .45rem;font-size:.86rem;line-height:1.1}
+                        .v3a-post-item-controls select{min-height:unset}
+                        .v3a-post-status-badge{display:inline-flex;align-items:center;gap:.25rem;padding:.18rem .5rem;border:1px solid var(--pico-muted-border-color);border-radius:999px;font-size:.84rem;line-height:1;white-space:nowrap}
+                        .v3a-post-status-badge.is-pending{border-color:rgba(217,119,6,.45);color:#d97706}
+                        .v3a-post-status-badge.is-approved{border-color:rgba(46,160,67,.45);color:#2ea043}
+                        .v3a-post-status-badge.is-rejected{border-color:rgba(214,57,57,.45);color:#d63939}
                         .v3a-post-preview-row{margin:.15rem 0;line-height:1.5}
+                        .v3a-post-admin-actions{display:flex;align-items:center;gap:.55rem;flex-wrap:wrap;margin-top:.65rem}
                         .v3a-post-admin-details{margin-top:.55rem;border:1px solid var(--pico-muted-border-color);border-radius:var(--pico-border-radius);padding:.55rem .7rem}
                         .v3a-post-admin-details summary{cursor:pointer;user-select:none;color:var(--pico-primary)}
                         .v3a-post-admin-grid{display:grid;gap:.65rem;margin-top:.65rem}
                         .v3a-post-inline-form{margin-top:.8rem;padding-top:.7rem;border-top:1px dashed var(--pico-muted-border-color)}
+                        .v3a-post-admin-status-form{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;margin:0}
+                        .v3a-post-admin-status-form select{margin:0;min-width:8.5rem}
+                        .v3a-post-dialog{border:1px solid var(--pico-muted-border-color);border-radius:var(--pico-border-radius);padding:0;max-width:min(860px,92vw);width:100%}
+                        .v3a-post-dialog::backdrop{background:rgba(0,0,0,.55)}
+                        .v3a-post-dialog-header{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.75rem 1rem;border-bottom:1px solid var(--pico-muted-border-color);margin:0}
+                        .v3a-post-dialog-content{padding:1rem;max-height:min(70vh,720px);overflow:auto}
+                        .v3a-post-dialog-content h4{margin-top:0}
+                        .v3a-post-md :is(h1,h2,h3,h4){margin:.75rem 0 .45rem}
+                        .v3a-post-md p{margin:.45rem 0}
+                        .v3a-post-md ul,.v3a-post-md ol{padding-left:1.2rem;margin:.45rem 0}
+                        .v3a-post-md blockquote{margin:.6rem 0;padding:.3rem .75rem;border-left:4px solid var(--pico-muted-border-color);color:var(--pico-muted-color)}
+                        .v3a-post-md pre{margin:.6rem 0;padding:.7rem;border:1px solid var(--pico-muted-border-color);border-radius:var(--pico-border-radius);overflow:auto}
+                        .v3a-post-md code{font-family:var(--pico-font-family-monospace,ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,\"Liberation Mono\",\"Courier New\",monospace)}
+                        .grecaptcha-badge{z-index:99999 !important;visibility:visible !important;opacity:1 !important;display:block !important}
                     </style>
 
                     <?php if ($noticeMessage !== ''): ?>
@@ -2062,40 +2427,83 @@ if (!function_exists('v3aPostRenderField')) {
                                 <button type="submit">生成并提交</button>
                                 <?php if ($limitSeconds > 0): ?><small class="v3a-post-help">提交频率限制：每 <?php echo (int) $limitSeconds; ?> 秒一次</small><?php endif; ?>
                             </div>
-                            <?php if ($recaptchaEnabled): ?><small class="v3a-post-help">已启用 reCAPTCHA v3 防刷验证。</small><?php endif; ?>
-                            <?php if ($aiApiKeyConfigured): ?>
-                                <small class="v3a-post-help">已启用 AI 生成内容。</small>
+                            <?php if ($recaptchaSiteEnabled): ?>
+                                <small class="v3a-post-help">已启用 reCAPTCHA v3 防刷验证<?php if (!$recaptchaVerifyEnabled): ?>（未配置 Secret Key，将不会进行服务端校验）<?php endif; ?>。</small>
+                            <?php endif; ?>
+                            <?php if ($aiEnabled): ?>
+                                <small class="v3a-post-help">已启用 AI 生成内容<?php if ($aiSource === 'vue3admin'): ?>（使用 Vue3Admin 配置）<?php elseif ($aiSource === 'theme'): ?>（使用主题配置）<?php endif; ?>。</small>
                             <?php else: ?>
                                 <small class="v3a-post-help">未配置 AI API Key，将仅使用基础解析生成内容。</small>
                             <?php endif; ?>
                         </form>
                     </div>
 
-                    <div class="v3a-post-list-card" id="v3a-post-pending-list">
-                        <h3>提交等待列表（<?php echo (int) count($pending); ?>）</h3>
+                    <div class="v3a-post-list-card" id="v3a-post-submission-list">
+                        <div class="v3a-post-list-head">
+                            <h3>投稿列表（<?php echo v3aPostH($statusFilterLabel, $charset); ?>：<?php echo (int) count($displaySubmissions); ?>）</h3>
+                            <?php if ($isAdmin && !empty($submissions)): ?>
+                                <form method="post" action="<?php echo v3aPostH($formAction, $charset); ?>" style="margin:0;">
+                                    <input type="hidden" name="v3a_action" value="admin_export">
+                                    <input type="hidden" name="_" value="<?php echo v3aPostH($csrfToken, $charset); ?>">
+                                    <button type="submit" class="secondary">导出 JSON</button>
+                                </form>
+                            <?php endif; ?>
+                        </div>
 
-                        <?php if ($isAdmin && !empty($pending)): ?>
-                            <form method="post" action="<?php echo v3aPostH($formAction, $charset); ?>" style="margin-bottom:.8rem;">
-                                <input type="hidden" name="v3a_action" value="admin_export">
-                                <input type="hidden" name="_" value="<?php echo v3aPostH($csrfToken, $charset); ?>">
-                                <button type="submit" class="secondary">导出 JSON</button>
-                            </form>
+                        <?php if (!empty($submissions)): ?>
+                            <div class="v3a-post-status-tabs" aria-label="投稿状态筛选">
+                                <?php
+                                $tabDefs = [
+                                    'all' => ['label' => '全部', 'count' => (int) ($statusCounts['all'] ?? 0)],
+                                    'pending' => ['label' => '待审核', 'count' => (int) ($statusCounts['pending'] ?? 0)],
+                                    'approved' => ['label' => '已通过', 'count' => (int) ($statusCounts['approved'] ?? 0)],
+                                    'rejected' => ['label' => '已拒绝', 'count' => (int) ($statusCounts['rejected'] ?? 0)],
+                                ];
+                                foreach ($tabDefs as $key => $tab) {
+                                    $url = v3aPostUrlWithParams($formAction, ['v3a_status' => $key], ['v3a_post_notice']);
+                                    $active = $statusFilter === $key ? ' is-active' : '';
+                                    ?>
+                                    <a href="<?php echo v3aPostH($url, $charset); ?>" role="button" class="secondary<?php echo $active; ?>"><?php echo v3aPostH((string) ($tab['label'] ?? $key), $charset); ?>（<?php echo (int) ($tab['count'] ?? 0); ?>）</a>
+                                <?php } ?>
+                            </div>
                         <?php endif; ?>
 
-                        <?php if (empty($pending)): ?>
-                            <p>暂时没有等待中的投稿。</p>
+                        <?php if (empty($displaySubmissions)): ?>
+                            <p><?php echo $isAdmin ? '当前筛选下暂无投稿记录。' : '暂时没有投稿。'; ?></p>
                         <?php else: ?>
-                            <?php foreach ($pending as $entry): ?>
+                            <?php foreach ($displaySubmissions as $entry): ?>
                                 <?php
                                 $entryId = (string) ($entry['id'] ?? '');
                                 $entryValues = is_array($entry['values'] ?? null) ? $entry['values'] : [];
                                 $created = (int) ($entry['created'] ?? 0);
                                 $updated = (int) ($entry['updated'] ?? 0);
+                                $status = (string) ($entry['status'] ?? 'pending');
+                                $statusLabel = $statusFilterLabels[$status] ?? $status;
                                 ?>
-                                <div class="v3a-post-list-item">
-                                    <div class="v3a-post-item-meta">
-                                        提交时间：<?php echo $created > 0 ? v3aPostFormatLocalTime($created, 'Y-m-d H:i:s') : '-'; ?>
-                                        <?php if ($updated > 0): ?> ｜最后编辑：<?php echo v3aPostFormatLocalTime($updated, 'Y-m-d H:i:s'); ?><?php endif; ?>
+                                <div class="v3a-post-list-item" data-entry-status="<?php echo v3aPostH($status, $charset); ?>">
+                                    <div class="v3a-post-item-head">
+                                        <div class="v3a-post-item-meta">
+                                            提交时间：<?php echo $created > 0 ? v3aPostFormatLocalTime($created, 'Y-m-d H:i:s') : '-'; ?>
+                                            <?php if ($updated > 0): ?> ｜最后编辑：<?php echo v3aPostFormatLocalTime($updated, 'Y-m-d H:i:s'); ?><?php endif; ?>
+                                        </div>
+                                        <div class="v3a-post-item-controls">
+                                            <span class="v3a-post-status-badge is-<?php echo v3aPostH($status, $charset); ?>"><?php echo v3aPostH($statusLabel, $charset); ?></span>
+                                            <?php if ($isAdmin): ?>
+                                                <button type="button" class="secondary" data-v3a-post-view data-entry-id="<?php echo v3aPostH($entryId, $charset); ?>">查看</button>
+                                                <button type="button" class="secondary" data-v3a-post-edit data-entry-id="<?php echo v3aPostH($entryId, $charset); ?>">编辑</button>
+                                                <form method="post" action="<?php echo v3aPostH($formAction, $charset); ?>" class="v3a-post-admin-status-form" onsubmit="return confirm('确定要更新该投稿的审核状态吗？');">
+                                                    <input type="hidden" name="v3a_action" value="admin_status">
+                                                    <input type="hidden" name="entry_id" value="<?php echo v3aPostH($entryId, $charset); ?>">
+                                                    <input type="hidden" name="_" value="<?php echo v3aPostH($csrfToken, $charset); ?>">
+                                                    <select name="status" aria-label="审核状态">
+                                                        <option value="pending" <?php echo $status === 'pending' ? 'selected' : ''; ?>>待审核</option>
+                                                        <option value="approved" <?php echo $status === 'approved' ? 'selected' : ''; ?>>通过</option>
+                                                        <option value="rejected" <?php echo $status === 'rejected' ? 'selected' : ''; ?>>拒绝</option>
+                                                    </select>
+                                                    <button type="submit" class="contrast">更新</button>
+                                                </form>
+                                            <?php endif; ?>
+                                        </div>
                                     </div>
 
                                     <?php foreach ($previewSchemas as $schema): ?>
@@ -2109,8 +2517,14 @@ if (!function_exists('v3aPostRenderField')) {
                                     <?php endforeach; ?>
 
                                     <?php if ($isAdmin): ?>
-                                        <details class="v3a-post-admin-details">
-                                            <summary>管理员展开查看完整内容 / 在线编辑</summary>
+                                        <template id="v3a-post-view-tpl-<?php echo v3aPostH($entryId, $charset); ?>">
+                                            <h4>投稿详情</h4>
+                                            <div class="v3a-post-item-meta">
+                                                投稿 ID：<?php echo v3aPostH($entryId, $charset); ?>
+                                                ｜状态：<?php echo v3aPostH($statusLabel, $charset); ?>
+                                                ｜提交时间：<?php echo $created > 0 ? v3aPostFormatLocalTime($created, 'Y-m-d H:i:s') : '-'; ?>
+                                                <?php if ($updated > 0): ?>｜最后编辑：<?php echo v3aPostFormatLocalTime($updated, 'Y-m-d H:i:s'); ?><?php endif; ?>
+                                            </div>
                                             <div class="v3a-post-admin-grid">
                                                 <?php foreach ($schemas as $schema): ?>
                                                     <?php
@@ -2119,11 +2533,23 @@ if (!function_exists('v3aPostRenderField')) {
                                                     $value = $entryValues[$name] ?? '';
                                                     $fullText = is_array($value) ? implode('、', array_map('strval', $value)) : (string) $value;
                                                     ?>
-                                                    <div><strong><?php echo v3aPostH($label, $charset); ?>：</strong><div><?php echo nl2br(v3aPostH($fullText, $charset)); ?></div></div>
+                                                    <div>
+                                                        <strong><?php echo v3aPostH($label, $charset); ?>：</strong>
+                                                        <div>
+                                                            <?php if ($name === 'content'): ?>
+                                                                <div class="v3a-post-md"><?php echo v3aPostRenderMarkdown($fullText, $charset); ?></div>
+                                                            <?php else: ?>
+                                                                <?php echo nl2br(v3aPostH($fullText, $charset)); ?>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    </div>
                                                 <?php endforeach; ?>
                                             </div>
+                                        </template>
 
-                                            <form method="post" action="<?php echo v3aPostH($formAction, $charset); ?>" class="v3a-post-inline-form">
+                                        <details class="v3a-post-admin-details">
+                                            <summary>在线编辑</summary>
+                                            <form method="post" action="<?php echo v3aPostH($formAction, $charset); ?>" class="v3a-post-inline-form" id="v3a-post-edit-<?php echo v3aPostH($entryId, $charset); ?>">
                                                 <input type="hidden" name="v3a_action" value="admin_update">
                                                 <input type="hidden" name="entry_id" value="<?php echo v3aPostH($entryId, $charset); ?>">
                                                 <input type="hidden" name="_" value="<?php echo v3aPostH($csrfToken, $charset); ?>">
@@ -2156,13 +2582,83 @@ if (!function_exists('v3aPostRenderField')) {
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </div>
+
+                    <dialog id="v3a-post-view-dialog" class="v3a-post-dialog">
+                        <form method="dialog" class="v3a-post-dialog-header">
+                            <strong>投稿详情</strong>
+                            <button type="submit" class="secondary">关闭</button>
+                        </form>
+                        <div id="v3a-post-view-body" class="v3a-post-dialog-content"></div>
+                    </dialog>
+
+                    <script>
+                        (function () {
+                            var dialog = document.getElementById('v3a-post-view-dialog');
+                            var body = document.getElementById('v3a-post-view-body');
+
+                            function openDialog(entryId) {
+                                if (!dialog || !body || !entryId) return;
+                                var tpl = document.getElementById('v3a-post-view-tpl-' + entryId);
+                                if (!tpl || !tpl.content) return;
+                                body.innerHTML = '';
+                                body.appendChild(tpl.content.cloneNode(true));
+                                if (typeof dialog.showModal === 'function') {
+                                    dialog.showModal();
+                                } else {
+                                    alert('当前浏览器不支持弹窗显示。');
+                                }
+                            }
+
+                            function openEdit(entryId) {
+                                if (!entryId) return;
+                                var form = document.getElementById('v3a-post-edit-' + entryId);
+                                if (!form) return;
+                                var details = form.closest('details');
+                                if (details) {
+                                    details.open = true;
+                                    try {
+                                        details.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                    } catch (e) {
+                                        details.scrollIntoView();
+                                    }
+                                }
+                                var first = form.querySelector('input,textarea,select');
+                                if (first && typeof first.focus === 'function') {
+                                    first.focus();
+                                }
+                            }
+
+                            document.addEventListener('click', function (event) {
+                                var viewBtn = event.target.closest('[data-v3a-post-view]');
+                                if (viewBtn) {
+                                    event.preventDefault();
+                                    openDialog(viewBtn.getAttribute('data-entry-id') || '');
+                                    return;
+                                }
+
+                                var editBtn = event.target.closest('[data-v3a-post-edit]');
+                                if (editBtn) {
+                                    event.preventDefault();
+                                    openEdit(editBtn.getAttribute('data-entry-id') || '');
+                                }
+                            });
+
+                            if (dialog) {
+                                dialog.addEventListener('click', function (event) {
+                                    if (event.target === dialog && typeof dialog.close === 'function') {
+                                        dialog.close();
+                                    }
+                                });
+                            }
+                        })();
+                    </script>
                 </section>
             </div>
         </article>
     </div>
 </main>
 
-<?php if ($recaptchaEnabled): ?>
+<?php if ($recaptchaSiteEnabled): ?>
     <script src="https://www.recaptcha.net/recaptcha/api.js?render=<?php echo rawurlencode($recaptchaId); ?>" async defer></script>
     <script>
         (function () {
