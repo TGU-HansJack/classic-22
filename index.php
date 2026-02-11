@@ -177,9 +177,9 @@ $classic22TimelineUpdatedAt = trim((string) ($classic22TimelineData['updatedAt']
 
                                     <?php if ($timelineBody !== ''): ?>
                                         <?php if ($timelineLink !== ''): ?>
-                                            <a class="classic22-home-timeline-summary" href="<?php echo htmlspecialchars($timelineLink, ENT_QUOTES, $this->options->charset); ?>"><?php echo htmlspecialchars($timelineBody, ENT_QUOTES, $this->options->charset); ?></a>
+                                            <a class="classic22-home-timeline-summary" href="<?php echo htmlspecialchars($timelineLink, ENT_QUOTES, $this->options->charset); ?>"><?php echo classic22RenderInlineMarkdown($timelineBody, (string) $this->options->charset); ?></a>
                                         <?php else: ?>
-                                            <p class="classic22-home-timeline-summary"><?php echo htmlspecialchars($timelineBody, ENT_QUOTES, $this->options->charset); ?></p>
+                                            <p class="classic22-home-timeline-summary"><?php echo classic22RenderInlineMarkdown($timelineBody, (string) $this->options->charset); ?></p>
                                         <?php endif; ?>
                                     <?php endif; ?>
                                 </div>

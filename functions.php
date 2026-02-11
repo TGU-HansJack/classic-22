@@ -283,6 +283,18 @@ HTML;
     );
     $form->addInput($linuxDoClientSecret);
 
+    $linuxDoCommentEnabled = new \Typecho\Widget\Helper\Form\Element\Select(
+        'linuxDoCommentEnabled',
+        [
+            '1' => _t('开启'),
+            '0' => _t('关闭'),
+        ],
+        '1',
+        _t('评论区 Linux Do 登录'),
+        _t('关闭后评论区不显示 Linux Do 登录按钮，也不会自动带入 Linux Do 用户信息。')
+    );
+    $form->addInput($linuxDoCommentEnabled);
+
     $liveWsEnabled = new \Typecho\Widget\Helper\Form\Element\Select(
         'liveWsEnabled',
         [
@@ -538,6 +550,7 @@ function classic22LinuxDoExtractSettingsFromRequest(): array
     $keys = [
         'linuxDoClientId',
         'linuxDoClientSecret',
+        'linuxDoCommentEnabled',
         'liveWsEnabled',
         'liveWsEndpoint',
         'aiEnabled',
@@ -2200,6 +2213,46 @@ function classic22TimelinePlainText(string $text, int $limit = 80): string
     }
 
     return \Typecho\Common::subStr($text, 0, max(10, $limit), '...');
+}
+
+function classic22RenderInlineMarkdown(string $text, string $charset = 'UTF-8'): string
+{
+    $charset = trim($charset);
+    if ($charset === '') {
+        $charset = 'UTF-8';
+    }
+
+    $text = trim($text);
+    if ($text === '') {
+        return '';
+    }
+
+    $escaped = htmlspecialchars($text, ENT_QUOTES, $charset);
+
+    $codeSegments = [];
+    $escapedWithCodePlaceholders = preg_replace_callback(
+        '/`([^`]+)`/u',
+        static function (array $matches) use (&$codeSegments): string {
+            $key = '@@C22CODE' . count($codeSegments) . '@@';
+            $codeSegments[$key] = '<code>' . $matches[1] . '</code>';
+            return $key;
+        },
+        $escaped
+    );
+
+    if (is_string($escapedWithCodePlaceholders)) {
+        $escaped = $escapedWithCodePlaceholders;
+    }
+
+    $escaped = (string) preg_replace('/~~(?=\\S)(.+?)(?<=\\S)~~/u', '<del>$1</del>', $escaped);
+    $escaped = (string) preg_replace('/\\*\\*(?=\\S)(.+?)(?<=\\S)\\*\\*/u', '<strong>$1</strong>', $escaped);
+    $escaped = (string) preg_replace('/(?<!\\*)\\*(?=\\S)(.+?)(?<=\\S)\\*(?!\\*)/u', '<em>$1</em>', $escaped);
+
+    if (!empty($codeSegments)) {
+        $escaped = strtr($escaped, $codeSegments);
+    }
+
+    return $escaped;
 }
 
 function classic22TimelineFormatTime(int $timestamp): string

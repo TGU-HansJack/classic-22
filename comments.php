@@ -1,6 +1,7 @@
 ﻿<?php if (!defined('__TYPECHO_ROOT_DIR__')) exit; ?>
 <?php
-$linuxDoEnabled = classic22LinuxDoIsConfigured($this->options);
+$linuxDoEnabled = classic22LinuxDoIsConfigured($this->options)
+    && classic22LinuxDoGetOption($this->options, 'linuxDoCommentEnabled', '1') !== '0';
 $linuxDoUser = $linuxDoEnabled ? classic22LinuxDoCurrentUser($this->options) : null;
 $linuxDoError = classic22LinuxDoConsumeError();
 
