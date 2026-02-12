@@ -139,26 +139,7 @@ $classic22TimelineUpdatedAt = trim((string) ($classic22TimelineData['updatedAt']
                                 $timelineSummary = trim((string) ($item['summary'] ?? ''));
                                 $timelineRelative = trim((string) ($item['relativeTime'] ?? ''));
                                 $timelineLink = trim((string) ($item['link'] ?? ''));
-
-                                $timelineType = trim((string) ($item['type'] ?? ''));
                                 $timelineBody = $timelineSummary !== '' ? $timelineSummary : $timelineTitle;
-
-                                if ($timelineType === 'post') {
-                                    $timelineBody = '新发布：' . ($timelineTitle !== '' ? $timelineTitle : $timelineBody);
-                                } elseif ($timelineType === 'comment') {
-                                    $commentAuthor = '';
-                                    if ($timelineTitle !== '' && preg_match('/^(.+?)\\s*评论了/u', $timelineTitle, $match)) {
-                                        $commentAuthor = trim((string) ($match[1] ?? ''));
-                                    }
-
-                                    if ($timelineSummary !== '') {
-                                        $timelineBody = $commentAuthor !== ''
-                                            ? ($commentAuthor . ' 评论：' . $timelineSummary)
-                                            : $timelineSummary;
-                                    } else {
-                                        $timelineBody = $timelineTitle;
-                                    }
-                                }
                                 if ($timelineBody !== '') {
                                     $timelineBody = (string) preg_replace('/(?:，\s*)?点击可直达原文[。.!！]?/u', '', $timelineBody);
                                     $timelineBody = trim($timelineBody);

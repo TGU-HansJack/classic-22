@@ -2355,6 +2355,11 @@ function classic22TimelineRelativeTime(int $timestamp): string
     return floor($delta / (86400 * 365)) . ' 年前';
 }
 
+function classic22TimelineFormatVersion(): int
+{
+    return 3;
+}
+
 function classic22TimelinePostFallbackLink(\Widget\Archive $archive, int $cid): string
 {
     if ($cid <= 0) {
@@ -2548,41 +2553,90 @@ function classic22TimelineRankChangeEvents(array $currentRankings, array $previo
         $currentList = is_array($currentRankings[$key] ?? null) ? $currentRankings[$key] : [];
         $previousList = is_array($previousRankings[$key] ?? null) ? $previousRankings[$key] : [];
 
-        $currentTop = classic22TimelineTopIds($currentList, 3);
-        $previousTop = classic22TimelineTopIds($previousList, 3);
+        $currentTop = classic22TimelineTopIds($currentList, 6);
+        $previousTop = classic22TimelineTopIds($previousList, 6);
 
         if ($currentTop === $previousTop) {
             continue;
         }
 
-        $entered = array_values(array_diff($currentTop, $previousTop));
-        $dropped = array_values(array_diff($previousTop, $currentTop));
+        $currentPos = [];
+        foreach (array_slice($currentList, 0, 6) as $idx => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
 
-        $parts = [];
-        $enteredTitles = classic22TimelineTitlesByIds($entered, $currentList);
-        if (!empty($enteredTitles)) {
-            $parts[] = '新上榜：' . implode('、', $enteredTitles);
+            $id = (int) ($row['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+
+            $currentPos[$id] = [
+                'rank' => $idx + 1,
+                'title' => trim((string) ($row['title'] ?? ('文章 #' . $id))),
+                'permalink' => trim((string) ($row['permalink'] ?? '')),
+            ];
         }
 
-        $droppedTitles = classic22TimelineTitlesByIds($dropped, $previousList);
-        if (!empty($droppedTitles)) {
-            $parts[] = '跌出：' . implode('、', $droppedTitles);
+        $previousPos = [];
+        foreach (array_slice($previousList, 0, 6) as $idx => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $id = (int) ($row['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+
+            $previousPos[$id] = $idx + 1;
         }
 
-        if (empty($parts)) {
-            $parts[] = 'TOP3 排名顺序发生变化';
+        if (empty($currentPos)) {
+            continue;
         }
 
-        $topLink = trim((string) (($currentList[0]['permalink'] ?? '') ?: ''));
+        $outsideRank = max(count($previousPos), count($currentPos)) + 1;
+        $bestTitle = '';
+        $bestRise = 0;
+        $bestLink = '';
+        $bestRank = 999;
+
+        foreach ($currentPos as $id => $meta) {
+            $currentRank = (int) ($meta['rank'] ?? 0);
+            if ($currentRank <= 0) {
+                continue;
+            }
+
+            $previousRank = isset($previousPos[$id]) ? (int) $previousPos[$id] : $outsideRank;
+            $rise = $previousRank - $currentRank;
+            if ($rise <= 0) {
+                continue;
+            }
+
+            if (
+                $rise > $bestRise
+                || ($rise === $bestRise && $currentRank < $bestRank)
+            ) {
+                $bestRise = $rise;
+                $bestRank = $currentRank;
+                $bestTitle = trim((string) ($meta['title'] ?? ''));
+                $bestLink = trim((string) ($meta['permalink'] ?? ''));
+            }
+        }
+
+        if ($bestRise <= 0 || $bestTitle === '') {
+            continue;
+        }
 
         $events[] = [
             'type' => 'rank',
             'timestamp' => $now,
             'time' => classic22TimelineFormatTime($now),
             'relativeTime' => classic22TimelineRelativeTime($now),
-            'title' => $label . ' TOP3 变动提醒',
-            'summary' => implode('；', $parts),
-            'link' => $topLink,
+            'title' => $label,
+            'summary' => '新榜单：' . $bestTitle . '上升' . $bestRise . '名次',
+            'link' => $bestLink,
         ];
     }
 
@@ -2708,128 +2762,98 @@ function classic22TimelineRecentCommentEvents(\Widget\Archive $archive, array $a
     return $events;
 }
 
-function classic22TimelineAiRewriteSummaries(\Widget\Archive $archive, array $events): array
+function classic22TimelineFormatSummary(array $event): string
+{
+    $type = trim((string) ($event['type'] ?? 'timeline'));
+    $title = trim((string) ($event['title'] ?? ''));
+    $summary = trim((string) ($event['summary'] ?? ''));
+
+    if ($type === 'post') {
+        if ($title !== '') {
+            $summary = '新发布：《' . $title . '》';
+        } elseif ($summary === '') {
+            $summary = '发布了新文章';
+        }
+    } elseif ($type === 'comment') {
+        $author = '';
+        if ($title !== '' && preg_match('/^(.+?)\s*评论了《.+》$/u', $title, $match)) {
+            $author = trim((string) ($match[1] ?? ''));
+        }
+
+        $snippet = classic22TimelinePlainText($summary, 40);
+        if ($snippet !== '') {
+            $summary = $author !== '' ? ($author . ' 评论：' . $snippet) : $snippet;
+        } elseif ($title !== '') {
+            $summary = $title;
+        } else {
+            $summary = '收到一条新评论';
+        }
+    } elseif ($type === 'rank') {
+        if ($summary === '') {
+            $summary = $title !== '' ? ('新榜单：' . $title) : '新榜单：榜单更新';
+        }
+    } else {
+        if ($summary === '' && $title !== '') {
+            $summary = $title;
+        }
+        if ($summary === '') {
+            $summary = '动态更新';
+        }
+    }
+
+    $summary = classic22TimelinePlainText($summary, 72);
+    if ($summary === '') {
+        return '';
+    }
+
+    if (substr($summary, -3) !== '...') {
+        $summary = (string) preg_replace('/[，。.!！]+$/u', '', $summary);
+    }
+
+    return trim($summary);
+}
+
+function classic22TimelineFormatEvents(array $events): array
 {
     if (empty($events)) {
-        return $events;
+        return [];
     }
 
-    $apiKey = trim((string) classic22LinuxDoGetOption($archive->options, 'aiApiKey', ''));
-    if ($apiKey === '') {
-        return $events;
-    }
+    $formatted = [];
 
-    $provider = strtolower(trim((string) classic22LinuxDoGetOption($archive->options, 'aiProvider', 'openai')));
-    if (!in_array($provider, ['openai', 'rightcode'], true)) {
-        $provider = 'openai';
-    }
-
-    $baseUrl = classic22AiSanitizeBaseUrl((string) classic22LinuxDoGetOption($archive->options, 'aiApiBaseUrl', 'https://api.openai.com/v1'), $provider);
-    if ($provider === 'rightcode') {
-        $baseLower = strtolower($baseUrl);
-        if ($baseLower === '' || strpos($baseLower, 'api.openai.com') !== false) {
-            $baseUrl = 'https://www.right.codes/codex/v1';
-        }
-    }
-
-    $mode = classic22AiResolveApiMode($archive->options);
-    if ($provider === 'rightcode' && $mode !== 'responses') {
-        $mode = 'responses';
-    }
-
-    $model = classic22AiDefaultModel($archive->options);
-    $apiUrl = $baseUrl . ($mode === 'responses' ? '/responses' : '/chat/completions');
-
-    $seedItems = [];
-    foreach ($events as $index => $item) {
-        $seedItems[] = [
-            'index' => $index + 1,
-            'type' => trim((string) ($item['type'] ?? 'timeline')),
-            'title' => trim((string) ($item['title'] ?? '')),
-            'summary' => trim((string) ($item['summary'] ?? '')),
-            'time' => trim((string) ($item['time'] ?? '')),
-        ];
-    }
-
-    $messages = [
-        [
-            'role' => 'system',
-            'content' => '你是博客首页时间线文案助手。请仅改写摘要 summary，让其更自然简洁（20~48字）。禁止编造事实、禁止新增事件、禁止输出敏感信息。只返回 JSON：{"items":[{"index":1,"summary":"..."}]}，不要附加其它文本。',
-        ],
-        [
-            'role' => 'user',
-            'content' => '请改写以下事件摘要：' . json_encode($seedItems, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        ],
-    ];
-
-    $payload = $mode === 'responses'
-        ? classic22AiBuildResponsesPayload($model, $messages)
-        : classic22AiBuildChatCompletionsPayload($model, $messages);
-
-    if (!is_string($payload) || trim($payload) === '') {
-        return $events;
-    }
-
-    $response = classic22AiRequest($apiUrl, $payload, $apiKey);
-    if (empty($response['ok'])) {
-        return $events;
-    }
-
-    $decoded = classic22AiDecodeJsonBody((string) ($response['body'] ?? ''));
-    if (!is_array($decoded)) {
-        return $events;
-    }
-
-    $answer = trim(classic22AiExtractAnswerByMode($decoded, $mode));
-    if ($answer === '') {
-        return $events;
-    }
-
-    if (preg_match('/```(?:json)?\s*(\{.*\})\s*```/is', $answer, $match)) {
-        $answer = trim((string) ($match[1] ?? ''));
-    }
-
-    $parsed = json_decode($answer, true);
-    if (!is_array($parsed)) {
-        $start = strpos($answer, '{');
-        $end = strrpos($answer, '}');
-        if ($start !== false && $end !== false && $end > $start) {
-            $snippet = substr($answer, $start, $end - $start + 1);
-            $parsed = json_decode((string) $snippet, true);
-        }
-    }
-
-    if (!is_array($parsed) || !is_array($parsed['items'] ?? null)) {
-        return $events;
-    }
-
-    $summaryByIndex = [];
-    foreach ($parsed['items'] as $item) {
+    foreach ($events as $item) {
         if (!is_array($item)) {
             continue;
         }
 
-        $idx = (int) ($item['index'] ?? 0);
-        $summary = classic22TimelinePlainText(trim((string) ($item['summary'] ?? '')), 48);
-        if ($idx <= 0 || $summary === '') {
+        $timestamp = (int) ($item['timestamp'] ?? 0);
+        if ($timestamp <= 0) {
+            $timestamp = time();
+        }
+
+        $item['timestamp'] = $timestamp;
+
+        $timeText = trim((string) ($item['time'] ?? ''));
+        if ($timeText === '') {
+            $timeText = classic22TimelineFormatTime($timestamp);
+        }
+        $item['time'] = $timeText;
+
+        $relativeText = trim((string) ($item['relativeTime'] ?? ''));
+        if ($relativeText === '') {
+            $relativeText = classic22TimelineRelativeTime($timestamp);
+        }
+        $item['relativeTime'] = $relativeText;
+
+        $item['summary'] = classic22TimelineFormatSummary($item);
+        if ($item['summary'] === '') {
             continue;
         }
 
-        $summaryByIndex[$idx] = $summary;
+        $formatted[] = $item;
     }
 
-    if (empty($summaryByIndex)) {
-        return $events;
-    }
-
-    foreach ($events as $index => $event) {
-        $key = $index + 1;
-        if (isset($summaryByIndex[$key])) {
-            $events[$index]['summary'] = $summaryByIndex[$key];
-        }
-    }
-
-    return $events;
+    return $formatted;
 }
 
 function classic22TimelineGeneratePayload(\Widget\Archive $archive, array $previous = []): array
@@ -2852,9 +2876,10 @@ function classic22TimelineGeneratePayload(\Widget\Archive $archive, array $previ
     });
 
     $events = array_slice($events, 0, 12);
-    $events = classic22TimelineAiRewriteSummaries($archive, $events);
+    $events = classic22TimelineFormatEvents($events);
 
     return [
+        'formatVersion' => classic22TimelineFormatVersion(),
         'generatedAt' => time(),
         'updatedAt' => classic22TimelineFormatTime(time()),
         'timeline' => $events,
@@ -2868,6 +2893,7 @@ function classic22TimelineGeneratePayload(\Widget\Archive $archive, array $previ
 function classic22TimelineHomeData(\Widget\Archive $archive): array
 {
     $empty = [
+        'formatVersion' => classic22TimelineFormatVersion(),
         'generatedAt' => 0,
         'updatedAt' => '',
         'timeline' => [],
@@ -2886,6 +2912,12 @@ function classic22TimelineHomeData(\Widget\Archive $archive): array
     }
 
     $cache = classic22TimelineReadCache();
+    $expectedFormatVersion = classic22TimelineFormatVersion();
+    $cachedFormatVersion = (int) ($cache['formatVersion'] ?? 1);
+    if ($cachedFormatVersion !== $expectedFormatVersion) {
+        $cache = [];
+    }
+
     $generatedAt = (int) ($cache['generatedAt'] ?? 0);
     $ttl = 900;
 
