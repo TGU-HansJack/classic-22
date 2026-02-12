@@ -27,7 +27,7 @@ $classic22PostAiArticlesApiUrl = $classic22PostAiEnabled
     : '';
 ?>
 
-<main class="container">
+<main class="container classic22-post-container">
     <div class="classic22-post-layout">
         <div class="container-thin classic22-post-main">
             <article class="post" itemscope itemtype="http://schema.org/BlogPosting">

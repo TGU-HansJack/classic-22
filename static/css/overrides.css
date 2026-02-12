@@ -508,6 +508,10 @@
 }
 
 /* Post TOC */
+main.container.classic22-post-container {
+  max-width: none;
+}
+
 .classic22-post-layout {
   display: block;
 }
@@ -581,6 +585,12 @@
     align-items: flex-start;
     justify-content: center;
     gap: 2rem;
+    box-sizing: border-box;
+    padding-left: clamp(
+      0px,
+      calc(100% - (40rem + 16rem + 2rem)),
+      calc(16rem + 2rem)
+    );
   }
 
   .classic22-post-main {
