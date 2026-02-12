@@ -2330,14 +2330,15 @@ if (!function_exists('v3aPostRenderField')) {
                 <?php $this->content(); ?>
 
                 <section class="v3a-post-board" data-nosnippet>
-                    <style>
-                        .v3a-post-form-card,.v3a-post-list-card{border:1px solid var(--pico-muted-border-color);border-radius:var(--pico-border-radius);padding:1rem;margin:1rem 0;background:var(--pico-card-background-color)}
-                        .v3a-post-form-card h3,.v3a-post-list-card h3{margin:0 0 .75rem}
-                        .v3a-post-list-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;flex-wrap:wrap;margin-bottom:.5rem}
+                     <style>
+                         .v3a-post-form-card,.v3a-post-list-card{border:1px solid var(--pico-muted-border-color);border-radius:var(--pico-border-radius);padding:1rem;margin:1rem 0;background:var(--pico-card-background-color)}
+                         .v3a-post-form-card h3,.v3a-post-list-card h3{margin:0 0 .75rem}
+                        .v3a-post-list-head{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;margin-bottom:.5rem}
                         .v3a-post-list-head h3{margin:0}
-                        .v3a-post-status-tabs{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:.55rem 0 .85rem}
-                        .v3a-post-status-tabs a[role="button"]{padding:.25rem .45rem;font-size:.86rem}
+                        .v3a-post-status-tabs{display:flex;align-items:center;justify-content:flex-end;gap:.5rem;flex-wrap:wrap;margin:0}
+                        .v3a-post-status-tabs a[role="button"],.v3a-post-status-tabs button{padding:0 .55rem;font-size:.86rem;line-height:1.1;white-space:nowrap;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;height:2rem;min-height:2rem;margin:0}
                         .v3a-post-status-tabs a[role="button"].is-active{background:var(--pico-primary-background);border-color:var(--pico-primary-border);color:var(--pico-primary-inverse)}
+                        .v3a-post-status-tabs form{margin:0;flex:0 0 auto;display:inline-flex;align-items:center}
                         .v3a-post-notice{padding:.7rem .85rem;border:1px solid var(--pico-muted-border-color);border-radius:var(--pico-border-radius);margin-bottom:.85rem}
                         .v3a-post-notice.is-success{border-color:rgba(46,160,67,.45);color:#2ea043}
                         .v3a-post-notice.is-error{border-color:rgba(214,57,57,.45);color:#d63939}
@@ -2358,6 +2359,8 @@ if (!function_exists('v3aPostRenderField')) {
                         .v3a-post-list-item:first-child{border-top:0;padding-top:0;margin-top:0}
                         .v3a-post-item-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;flex-wrap:wrap}
                         .v3a-post-item-meta{color:var(--pico-muted-color);font-size:.9rem;margin-bottom:.35rem}
+                        .v3a-post-item-meta-row{display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex:1 1 auto;min-width:0}
+                        .v3a-post-item-meta-row > div{flex:1 1 auto;min-width:0}
                         .v3a-post-item-controls{display:flex;align-items:center;justify-content:flex-end;gap:.5rem;flex-wrap:wrap}
                         .v3a-post-item-controls button,.v3a-post-item-controls a[role="button"],.v3a-post-item-controls select{padding:.25rem .45rem;font-size:.86rem;line-height:1.1}
                         .v3a-post-item-controls select{min-height:unset}
@@ -2366,26 +2369,34 @@ if (!function_exists('v3aPostRenderField')) {
                         .v3a-post-status-badge.is-approved{border-color:rgba(46,160,67,.45);color:#2ea043}
                         .v3a-post-status-badge.is-rejected{border-color:rgba(214,57,57,.45);color:#d63939}
                         .v3a-post-preview-row{margin:.15rem 0;line-height:1.5}
-                        .v3a-post-admin-actions{display:flex;align-items:center;gap:.55rem;flex-wrap:wrap;margin-top:.65rem}
+                        .v3a-post-admin-actions{display:flex;align-items:center;justify-content:space-between;gap:.65rem;flex-wrap:wrap;margin-top:.65rem;max-width:100%}
+                        .v3a-post-admin-actions-left{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+                        .v3a-post-admin-actions-right{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-left:auto}
+                        .v3a-post-admin-actions button,.v3a-post-admin-actions a[role="button"]{padding:0 .55rem;font-size:.86rem;line-height:1.1;white-space:nowrap;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;height:2rem;min-height:2rem;margin:0}
+                        .v3a-post-admin-actions select{padding:0 .45rem;font-size:.86rem;line-height:1.1;white-space:nowrap;flex:0 0 auto;box-sizing:border-box;height:2rem;min-height:2rem;margin:0}
                         .v3a-post-admin-details{margin-top:.55rem;border:1px solid var(--pico-muted-border-color);border-radius:var(--pico-border-radius);padding:.55rem .7rem}
                         .v3a-post-admin-details summary{cursor:pointer;user-select:none;color:var(--pico-primary)}
                         .v3a-post-admin-grid{display:grid;gap:.65rem;margin-top:.65rem}
                         .v3a-post-inline-form{margin-top:.8rem;padding-top:.7rem;border-top:1px dashed var(--pico-muted-border-color)}
-                        .v3a-post-admin-status-form{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;margin:0}
-                        .v3a-post-admin-status-form select{margin:0;min-width:8.5rem}
+                        .v3a-post-admin-status-form{display:flex;align-items:center;justify-content:flex-end;gap:.45rem;flex-wrap:nowrap;margin:0;flex:0 0 auto;max-width:100%}
+                        .v3a-post-admin-status-form select{margin:0;min-width:6rem;max-width:9rem;min-height:2rem}
+                        .v3a-post-admin-status-form button{padding:0 .45rem;min-width:unset}
                         .v3a-post-dialog{border:1px solid var(--pico-muted-border-color);border-radius:var(--pico-border-radius);padding:0;max-width:min(860px,92vw);width:100%}
                         .v3a-post-dialog::backdrop{background:rgba(0,0,0,.55)}
                         .v3a-post-dialog-header{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.75rem 1rem;border-bottom:1px solid var(--pico-muted-border-color);margin:0}
-                        .v3a-post-dialog-content{padding:1rem;max-height:min(70vh,720px);overflow:auto}
+                        .v3a-post-dialog-header button{padding:.25rem .55rem;font-size:.86rem;line-height:1.1;width:auto;flex:0 0 auto}
+                        .v3a-post-dialog-content{padding:1rem;max-height:min(70vh,720px);overflow:auto;overflow-x:hidden;overflow-wrap:anywhere;word-break:break-word}
                         .v3a-post-dialog-content h4{margin-top:0}
+                        .v3a-post-dialog-content :is(a,code){overflow-wrap:anywhere;word-break:break-word}
+                        .v3a-post-admin-grid > div > div{overflow-wrap:anywhere;word-break:break-word}
                         .v3a-post-md :is(h1,h2,h3,h4){margin:.75rem 0 .45rem}
                         .v3a-post-md p{margin:.45rem 0}
                         .v3a-post-md ul,.v3a-post-md ol{padding-left:1.2rem;margin:.45rem 0}
                         .v3a-post-md blockquote{margin:.6rem 0;padding:.3rem .75rem;border-left:4px solid var(--pico-muted-border-color);color:var(--pico-muted-color)}
-                        .v3a-post-md pre{margin:.6rem 0;padding:.7rem;border:1px solid var(--pico-muted-border-color);border-radius:var(--pico-border-radius);overflow:auto}
+                        .v3a-post-md pre{margin:.6rem 0;padding:.7rem;border:1px solid var(--pico-muted-border-color);border-radius:var(--pico-border-radius);overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
                         .v3a-post-md code{font-family:var(--pico-font-family-monospace,ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,\"Liberation Mono\",\"Courier New\",monospace)}
                         .grecaptcha-badge{z-index:99999 !important;visibility:visible !important;opacity:1 !important;display:block !important}
-                    </style>
+                     </style>
 
                     <?php if ($noticeMessage !== ''): ?>
                         <div class="v3a-post-notice <?php echo $noticeType === 'success' ? 'is-success' : 'is-error'; ?>" role="alert">
@@ -2438,40 +2449,39 @@ if (!function_exists('v3aPostRenderField')) {
                         </form>
                     </div>
 
-                    <div class="v3a-post-list-card" id="v3a-post-submission-list">
-                        <div class="v3a-post-list-head">
-                            <h3>投稿列表（<?php echo v3aPostH($statusFilterLabel, $charset); ?>：<?php echo (int) count($displaySubmissions); ?>）</h3>
-                            <?php if ($isAdmin && !empty($submissions)): ?>
-                                <form method="post" action="<?php echo v3aPostH($formAction, $charset); ?>" style="margin:0;">
-                                    <input type="hidden" name="v3a_action" value="admin_export">
-                                    <input type="hidden" name="_" value="<?php echo v3aPostH($csrfToken, $charset); ?>">
-                                    <button type="submit" class="secondary">导出 JSON</button>
-                                </form>
-                            <?php endif; ?>
-                        </div>
-
-                        <?php if (!empty($submissions)): ?>
-                            <div class="v3a-post-status-tabs" aria-label="投稿状态筛选">
-                                <?php
-                                $tabDefs = [
-                                    'all' => ['label' => '全部', 'count' => (int) ($statusCounts['all'] ?? 0)],
-                                    'pending' => ['label' => '待审核', 'count' => (int) ($statusCounts['pending'] ?? 0)],
-                                    'approved' => ['label' => '已通过', 'count' => (int) ($statusCounts['approved'] ?? 0)],
-                                    'rejected' => ['label' => '已拒绝', 'count' => (int) ($statusCounts['rejected'] ?? 0)],
-                                ];
-                                foreach ($tabDefs as $key => $tab) {
-                                    $url = v3aPostUrlWithParams($formAction, ['v3a_status' => $key], ['v3a_post_notice']);
-                                    $active = $statusFilter === $key ? ' is-active' : '';
-                                    ?>
-                                    <a href="<?php echo v3aPostH($url, $charset); ?>" role="button" class="secondary<?php echo $active; ?>"><?php echo v3aPostH((string) ($tab['label'] ?? $key), $charset); ?>（<?php echo (int) ($tab['count'] ?? 0); ?>）</a>
-                                <?php } ?>
-                            </div>
-                        <?php endif; ?>
-
-                        <?php if (empty($displaySubmissions)): ?>
-                            <p><?php echo $isAdmin ? '当前筛选下暂无投稿记录。' : '暂时没有投稿。'; ?></p>
-                        <?php else: ?>
-                            <?php foreach ($displaySubmissions as $entry): ?>
+                     <div class="v3a-post-list-card" id="v3a-post-submission-list">
+                         <div class="v3a-post-list-head">
+                             <h3>投稿列表</h3>
+                             <?php if (!empty($submissions)): ?>
+                                 <div class="v3a-post-status-tabs" aria-label="投稿状态筛选">
+                                     <?php
+                                     $tabDefs = [
+                                         'all' => ['label' => '全部', 'count' => (int) ($statusCounts['all'] ?? 0)],
+                                         'pending' => ['label' => '待审核', 'count' => (int) ($statusCounts['pending'] ?? 0)],
+                                         'approved' => ['label' => '已通过', 'count' => (int) ($statusCounts['approved'] ?? 0)],
+                                         'rejected' => ['label' => '已拒绝', 'count' => (int) ($statusCounts['rejected'] ?? 0)],
+                                     ];
+                                     foreach ($tabDefs as $key => $tab) {
+                                         $url = v3aPostUrlWithParams($formAction, ['v3a_status' => $key], ['v3a_post_notice']);
+                                         $active = $statusFilter === $key ? ' is-active' : '';
+                                         ?>
+                                         <a href="<?php echo v3aPostH($url, $charset); ?>" role="button" class="secondary<?php echo $active; ?>"><?php echo v3aPostH((string) ($tab['label'] ?? $key), $charset); ?>（<?php echo (int) ($tab['count'] ?? 0); ?>）</a>
+                                     <?php } ?>
+                                     <?php if ($isAdmin && !empty($submissions)): ?>
+                                         <form method="post" action="<?php echo v3aPostH($formAction, $charset); ?>">
+                                             <input type="hidden" name="v3a_action" value="admin_export">
+                                             <input type="hidden" name="_" value="<?php echo v3aPostH($csrfToken, $charset); ?>">
+                                             <button type="submit" class="secondary">导出 JSON</button>
+                                         </form>
+                                     <?php endif; ?>
+                                 </div>
+                             <?php endif; ?>
+                         </div>
+ 
+                         <?php if (empty($displaySubmissions)): ?>
+                             <p><?php echo $isAdmin ? '当前筛选下暂无投稿记录。' : '暂时没有投稿。'; ?></p>
+                         <?php else: ?>
+                             <?php foreach ($displaySubmissions as $entry): ?>
                                 <?php
                                 $entryId = (string) ($entry['id'] ?? '');
                                 $entryValues = is_array($entry['values'] ?? null) ? $entry['values'] : [];
@@ -2480,31 +2490,16 @@ if (!function_exists('v3aPostRenderField')) {
                                 $status = (string) ($entry['status'] ?? 'pending');
                                 $statusLabel = $statusFilterLabels[$status] ?? $status;
                                 ?>
-                                <div class="v3a-post-list-item" data-entry-status="<?php echo v3aPostH($status, $charset); ?>">
-                                    <div class="v3a-post-item-head">
-                                        <div class="v3a-post-item-meta">
-                                            提交时间：<?php echo $created > 0 ? v3aPostFormatLocalTime($created, 'Y-m-d H:i:s') : '-'; ?>
-                                            <?php if ($updated > 0): ?> ｜最后编辑：<?php echo v3aPostFormatLocalTime($updated, 'Y-m-d H:i:s'); ?><?php endif; ?>
-                                        </div>
-                                        <div class="v3a-post-item-controls">
-                                            <span class="v3a-post-status-badge is-<?php echo v3aPostH($status, $charset); ?>"><?php echo v3aPostH($statusLabel, $charset); ?></span>
-                                            <?php if ($isAdmin): ?>
-                                                <button type="button" class="secondary" data-v3a-post-view data-entry-id="<?php echo v3aPostH($entryId, $charset); ?>">查看</button>
-                                                <button type="button" class="secondary" data-v3a-post-edit data-entry-id="<?php echo v3aPostH($entryId, $charset); ?>">编辑</button>
-                                                <form method="post" action="<?php echo v3aPostH($formAction, $charset); ?>" class="v3a-post-admin-status-form" onsubmit="return confirm('确定要更新该投稿的审核状态吗？');">
-                                                    <input type="hidden" name="v3a_action" value="admin_status">
-                                                    <input type="hidden" name="entry_id" value="<?php echo v3aPostH($entryId, $charset); ?>">
-                                                    <input type="hidden" name="_" value="<?php echo v3aPostH($csrfToken, $charset); ?>">
-                                                    <select name="status" aria-label="审核状态">
-                                                        <option value="pending" <?php echo $status === 'pending' ? 'selected' : ''; ?>>待审核</option>
-                                                        <option value="approved" <?php echo $status === 'approved' ? 'selected' : ''; ?>>通过</option>
-                                                        <option value="rejected" <?php echo $status === 'rejected' ? 'selected' : ''; ?>>拒绝</option>
-                                                    </select>
-                                                    <button type="submit" class="contrast">更新</button>
-                                                </form>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
+                                 <div class="v3a-post-list-item" data-entry-status="<?php echo v3aPostH($status, $charset); ?>">
+                                     <div class="v3a-post-item-head">
+                                         <div class="v3a-post-item-meta v3a-post-item-meta-row">
+                                             <div>
+                                                 提交时间：<?php echo $created > 0 ? v3aPostFormatLocalTime($created, 'Y-m-d H:i:s') : '-'; ?>
+                                                 <?php if ($updated > 0): ?> ｜最后编辑：<?php echo v3aPostFormatLocalTime($updated, 'Y-m-d H:i:s'); ?><?php endif; ?>
+                                             </div>
+                                             <span class="v3a-post-status-badge is-<?php echo v3aPostH($status, $charset); ?>"><?php echo v3aPostH($statusLabel, $charset); ?></span>
+                                         </div>
+                                     </div>
 
                                     <?php foreach ($previewSchemas as $schema): ?>
                                         <?php
@@ -2547,9 +2542,9 @@ if (!function_exists('v3aPostRenderField')) {
                                             </div>
                                         </template>
 
-                                        <details class="v3a-post-admin-details">
-                                            <summary>在线编辑</summary>
-                                            <form method="post" action="<?php echo v3aPostH($formAction, $charset); ?>" class="v3a-post-inline-form" id="v3a-post-edit-<?php echo v3aPostH($entryId, $charset); ?>">
+                                         <details class="v3a-post-admin-details">
+                                             <summary>在线编辑</summary>
+                                             <form method="post" action="<?php echo v3aPostH($formAction, $charset); ?>" class="v3a-post-inline-form" id="v3a-post-edit-<?php echo v3aPostH($entryId, $charset); ?>">
                                                 <input type="hidden" name="v3a_action" value="admin_update">
                                                 <input type="hidden" name="entry_id" value="<?php echo v3aPostH($entryId, $charset); ?>">
                                                 <input type="hidden" name="_" value="<?php echo v3aPostH($csrfToken, $charset); ?>">
@@ -2574,14 +2569,34 @@ if (!function_exists('v3aPostRenderField')) {
                                                     <?php endforeach; ?>
                                                 </div>
 
-                                                <div class="v3a-post-form-actions"><button type="submit">保存修改</button></div>
-                                            </form>
-                                        </details>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </div>
+                                                 <div class="v3a-post-form-actions"><button type="submit">保存修改</button></div>
+                                             </form>
+                                         </details>
+
+                                        <div class="v3a-post-admin-actions" aria-label="管理员操作">
+                                             <div class="v3a-post-admin-actions-left">
+                                                 <button type="button" class="secondary" data-v3a-post-view data-entry-id="<?php echo v3aPostH($entryId, $charset); ?>">查看</button>
+                                                 <button type="button" class="secondary" data-v3a-post-edit data-entry-id="<?php echo v3aPostH($entryId, $charset); ?>">编辑</button>
+                                             </div>
+                                             <div class="v3a-post-admin-actions-right">
+                                                 <form method="post" action="<?php echo v3aPostH($formAction, $charset); ?>" class="v3a-post-admin-status-form" onsubmit="return confirm('确定要更新该投稿的审核状态吗？');">
+                                                     <input type="hidden" name="v3a_action" value="admin_status">
+                                                     <input type="hidden" name="entry_id" value="<?php echo v3aPostH($entryId, $charset); ?>">
+                                                     <input type="hidden" name="_" value="<?php echo v3aPostH($csrfToken, $charset); ?>">
+                                                     <select name="status" aria-label="审核状态">
+                                                         <option value="pending" <?php echo $status === 'pending' ? 'selected' : ''; ?>>待审核</option>
+                                                         <option value="approved" <?php echo $status === 'approved' ? 'selected' : ''; ?>>通过</option>
+                                                         <option value="rejected" <?php echo $status === 'rejected' ? 'selected' : ''; ?>>拒绝</option>
+                                                     </select>
+                                                     <button type="submit" class="contrast">更新</button>
+                                                 </form>
+                                             </div>
+                                        </div>
+                                     <?php endif; ?>
+                                 </div>
+                             <?php endforeach; ?>
+                         <?php endif; ?>
+                     </div>
 
                     <dialog id="v3a-post-view-dialog" class="v3a-post-dialog">
                         <form method="dialog" class="v3a-post-dialog-header">
