@@ -961,12 +961,17 @@ body.classic22-post-ai-open {
 }
 
 @media (max-width: 768px) {
+  .post-card-meta-row .entry-meta li.feather-user,
+  .post-card-meta-row .entry-meta li.feather-message {
+    display: none;
+  }
+
   .post-card-meta-row .entry-meta li:not(:last-child) {
     margin-right: 0.62rem;
   }
 
   .post-card-meta-row .classic22-live-online-badge {
-    margin-left: 0.62rem;
+    margin-left: 0;
   }
 }
 

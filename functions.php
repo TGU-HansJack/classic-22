@@ -1407,6 +1407,7 @@ function postMeta(
         <div class="post-card-meta-row">
             <ul class="entry-meta list-inline text-muted">
                 <li class="feather-calendar"><time datetime="<?php $archive->date('c'); ?>" itemprop="datePublished"><?php $archive->date(); ?></time></li>
+                <li class="feather-user" itemprop="author" itemscope itemtype="http://schema.org/Person"><a itemprop="name" href="<?php $archive->author->permalink(); ?>" rel="author"><?php $archive->author(); ?></a></li>
                 <li class="feather-folder"><?php $archive->category(', '); ?></li>
                 <li class="feather-message"><a href="<?php $archive->permalink() ?>#comments"  itemprop="discussionUrl"><?php $archive->commentsNum(_t('暂无评论'), _t('1 条评论'), _t('%d 条评论')); ?></a></li>
             </ul>
@@ -1418,6 +1419,7 @@ function postMeta(
         <?php if ($metaType != 'page' && $metaType !== 'card'): ?>
         <ul class="entry-meta list-inline text-muted">
             <li class="feather-calendar"><time datetime="<?php $archive->date('c'); ?>" itemprop="datePublished"><?php $archive->date(); ?></time></li>
+            <li class="feather-user" itemprop="author" itemscope itemtype="http://schema.org/Person"><a itemprop="name" href="<?php $archive->author->permalink(); ?>" rel="author"><?php $archive->author(); ?></a></li>
             <li class="feather-folder"><?php $archive->category(', '); ?></li>
             <li class="feather-message"><a href="<?php $archive->permalink() ?>#comments"  itemprop="discussionUrl"><?php $archive->commentsNum(_t('暂无评论'), _t('1 条评论'), _t('%d 条评论')); ?></a></li>
         </ul>
