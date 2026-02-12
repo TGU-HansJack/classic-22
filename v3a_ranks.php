@@ -450,6 +450,61 @@ function v3a_ranks_cache_save(array $cache): void
     }
 }
 
+function v3a_ranks_page_cache_path(): string
+{
+    return __TYPECHO_ROOT_DIR__ . '/usr/cache/v3a_ranks_page_cache.json';
+}
+
+function v3a_ranks_page_cache_load(string $key, int $ttl): ?array
+{
+    $path = v3a_ranks_page_cache_path();
+    if (!is_file($path)) {
+        return null;
+    }
+
+    $raw = @file_get_contents($path);
+    if ($raw === false || trim($raw) === '') {
+        return null;
+    }
+
+    $data = json_decode((string) $raw, true);
+    if (!is_array($data)) {
+        return null;
+    }
+
+    if ((string) ($data['key'] ?? '') !== $key) {
+        return null;
+    }
+
+    $generatedAt = (int) ($data['generated_at'] ?? 0);
+    if ($generatedAt <= 0 || (time() - $generatedAt) > $ttl) {
+        return null;
+    }
+
+    $payload = $data['payload'] ?? null;
+    return is_array($payload) ? $payload : null;
+}
+
+function v3a_ranks_page_cache_save(string $key, array $payload): void
+{
+    $path = v3a_ranks_page_cache_path();
+    $dir = dirname($path);
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+
+    $data = [
+        'key' => $key,
+        'generated_at' => time(),
+        'payload' => $payload,
+    ];
+
+    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json !== false) {
+        @file_put_contents($path, $json, LOCK_EX);
+    }
+}
+
 function v3a_ranks_fetch_repo_stats(array $repos, bool &$rateLimited, int &$latestFetchedAt): array
 {
     $stats = [];
@@ -778,44 +833,82 @@ $db = \Typecho\Db::get();
 $export = \Typecho\Plugin::export();
 $v3aEnabled = isset($export['activated']['Vue3Admin']);
 
+$cacheTtl = 3600;
+$cacheKey = sha1((string) json_encode([
+    'format' => 1,
+    'siteUrl' => $siteUrl,
+    'indexUrl' => $indexUrl,
+    'v3aEnabled' => $v3aEnabled ? 1 : 0,
+]));
+
+$cached = v3a_ranks_page_cache_load($cacheKey, $cacheTtl);
+
 $notice = [];
-
 $viewRank = [];
-if ($v3aEnabled) {
-    $viewRank = v3a_ranks_build_views_rank(v3a_ranks_fetch_view_counts($db), $db, $siteUrl, $indexUrl, 10);
-} else {
-    $notice[] = '未启用 Vue3Admin 插件，浏览量榜单不可用。';
-}
-
-$commentRank = v3a_ranks_fetch_comments_rank($db, $siteUrl, $indexUrl, 5);
-
-$pluginEntries = v3a_ranks_build_repo_entries(v3a_ranks_fetch_category_posts($db, 'plugins'), $db, $siteUrl, $indexUrl, 'plugins');
-$themeEntries = v3a_ranks_build_repo_entries(v3a_ranks_fetch_category_posts($db, 'themes'), $db, $siteUrl, $indexUrl, 'themes');
-$allEntries = array_merge($pluginEntries, $themeEntries);
-
-$repos = [];
-foreach ($allEntries as $entry) {
-    $repo = (string) ($entry['repo'] ?? '');
-    if ($repo !== '') {
-        $repos[] = $repo;
-    }
-}
-$repos = array_values(array_unique($repos));
-
-$githubRateLimited = false;
+$commentRank = [];
+$pluginStarRank = [];
+$themeStarRank = [];
+$maintenanceRank = [];
 $githubFetchedAt = 0;
-$repoStats = !empty($repos) ? v3a_ranks_fetch_repo_stats($repos, $githubRateLimited, $githubFetchedAt) : [];
 
-if (empty($repos)) {
-    $notice[] = '未从 plugins/themes 分类文章中解析到 GitHub 仓库链接。';
-}
-if ($githubRateLimited) {
-    $notice[] = 'GitHub API 频率受限，部分数据来自缓存。';
-}
+if (is_array($cached)) {
+    $notice = is_array($cached['notice'] ?? null) ? $cached['notice'] : [];
+    $viewRank = is_array($cached['viewRank'] ?? null) ? $cached['viewRank'] : [];
+    $commentRank = is_array($cached['commentRank'] ?? null) ? $cached['commentRank'] : [];
+    $pluginStarRank = is_array($cached['pluginStarRank'] ?? null) ? $cached['pluginStarRank'] : [];
+    $themeStarRank = is_array($cached['themeStarRank'] ?? null) ? $cached['themeStarRank'] : [];
+    $maintenanceRank = is_array($cached['maintenanceRank'] ?? null) ? $cached['maintenanceRank'] : [];
+    $githubFetchedAt = (int) ($cached['githubFetchedAt'] ?? 0);
+} else {
+    $notice = [];
 
-$pluginStarRank = v3a_ranks_build_star_rank($pluginEntries, $repoStats, 5);
-$themeStarRank = v3a_ranks_build_star_rank($themeEntries, $repoStats, 5);
-$maintenanceRank = v3a_ranks_build_maintenance_rank($allEntries, $repoStats, 5);
+    $viewRank = [];
+    if ($v3aEnabled) {
+        $viewRank = v3a_ranks_build_views_rank(v3a_ranks_fetch_view_counts($db), $db, $siteUrl, $indexUrl, 10);
+    } else {
+        $notice[] = '未启用 Vue3Admin 插件，浏览量榜单不可用。';
+    }
+
+    $commentRank = v3a_ranks_fetch_comments_rank($db, $siteUrl, $indexUrl, 5);
+
+    $pluginEntries = v3a_ranks_build_repo_entries(v3a_ranks_fetch_category_posts($db, 'plugins'), $db, $siteUrl, $indexUrl, 'plugins');
+    $themeEntries = v3a_ranks_build_repo_entries(v3a_ranks_fetch_category_posts($db, 'themes'), $db, $siteUrl, $indexUrl, 'themes');
+    $allEntries = array_merge($pluginEntries, $themeEntries);
+
+    $repos = [];
+    foreach ($allEntries as $entry) {
+        $repo = (string) ($entry['repo'] ?? '');
+        if ($repo !== '') {
+            $repos[] = $repo;
+        }
+    }
+    $repos = array_values(array_unique($repos));
+
+    $githubRateLimited = false;
+    $githubFetchedAt = 0;
+    $repoStats = !empty($repos) ? v3a_ranks_fetch_repo_stats($repos, $githubRateLimited, $githubFetchedAt) : [];
+
+    if (empty($repos)) {
+        $notice[] = '未从 plugins/themes 分类文章中解析到 GitHub 仓库链接。';
+    }
+    if ($githubRateLimited) {
+        $notice[] = 'GitHub API 频率受限，部分数据来自缓存。';
+    }
+
+    $pluginStarRank = v3a_ranks_build_star_rank($pluginEntries, $repoStats, 5);
+    $themeStarRank = v3a_ranks_build_star_rank($themeEntries, $repoStats, 5);
+    $maintenanceRank = v3a_ranks_build_maintenance_rank($allEntries, $repoStats, 5);
+
+    v3a_ranks_page_cache_save($cacheKey, [
+        'notice' => $notice,
+        'viewRank' => $viewRank,
+        'commentRank' => $commentRank,
+        'pluginStarRank' => $pluginStarRank,
+        'themeStarRank' => $themeStarRank,
+        'maintenanceRank' => $maintenanceRank,
+        'githubFetchedAt' => $githubFetchedAt,
+    ]);
+}
 
 $this->need('header.php');
 ?>

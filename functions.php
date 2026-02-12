@@ -3269,7 +3269,8 @@ function classic22TimelineHomeData(\Widget\Archive $archive): array
     }
 
     $generatedAt = (int) ($cache['generatedAt'] ?? 0);
-    $ttl = 900;
+    // Refresh home timeline + rankings once per hour to avoid frequent heavy queries.
+    $ttl = 3600;
 
     if ($generatedAt > 0 && (time() - $generatedAt) <= $ttl) {
         return array_merge($empty, $cache);
