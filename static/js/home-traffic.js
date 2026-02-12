@@ -58,7 +58,8 @@
 
     return {
       animation: false,
-      grid: { left: 46, right: 12, top: 10, bottom: 34 },
+      // Leave a bit more room for y-axis labels so they don't get clipped.
+      grid: { left: 56, right: 12, top: 10, bottom: 34, containLabel: true },
       tooltip: { trigger: 'axis', axisPointer: { type: 'line' } },
       xAxis: {
         type: 'category',
