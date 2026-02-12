@@ -627,7 +627,26 @@ main.container.classic22-post-container {
 }
 
 /* Code highlight */
+.fmt code {
+  display: inline;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.fmt pre {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.fmt pre code,
 .fmt pre code.hljs {
+  display: block;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
   border-radius: var(--pico-border-radius);
   padding: 1rem;
   border: 1px solid var(--pico-muted-border-color);
