@@ -78,7 +78,22 @@
 
     var titleNode = getTitleNode();
     var contentNode = getContentBodyNode();
-    if (!titleNode || !contentNode || !apiUrl || cid <= 0) {
+    if (!titleNode || !contentNode || cid <= 0) {
+      return;
+    }
+
+    if (!apiUrl) {
+      try {
+        var fallback = new URL(window.location.href);
+        fallback.hash = '';
+        fallback.searchParams.set('classic22_translate', '1');
+        apiUrl = fallback.toString();
+      } catch (err) {
+        apiUrl = '';
+      }
+    }
+
+    if (!apiUrl) {
       return;
     }
 

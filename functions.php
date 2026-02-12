@@ -1392,7 +1392,9 @@ function themeInit($archive)
 
 function classic22Vue3AdminTranslateHandleRequest($archive): void
 {
-    if (!is_object($archive) || !isset($archive->request) || !isset($archive->options)) {
+    // Note: $archive->options is a protected property, and may not be accessible via isset() in all contexts.
+    // The handler itself can work without directly relying on $archive->options.
+    if (!is_object($archive) || !isset($archive->request)) {
         return;
     }
 
@@ -1445,7 +1447,7 @@ function classic22Vue3AdminTranslateHandleRequest($archive): void
         $db = classic22LinuxDoDb();
         if (is_object($db)) {
             $contentRow = $db->fetchRow(
-                $db->select(['cid', 'type', 'text', 'status', 'password', 'authorId'])
+                $db->select('cid', 'type', 'text', 'status', 'password', 'authorId')
                     ->from('table.contents')
                     ->where('cid = ?', $cid)
                     ->limit(1)
@@ -1722,7 +1724,11 @@ function postMeta(
                 $translateLangOptions = classic22PostTranslateLangOptions($archive->options);
                 $translateLangOptionsJson = (string) (json_encode($translateLangOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '["zh"]');
                 try {
-                    $translateApiUrl = trim((string) ($archive->options->index ?? ''));
+                    // Use current post permalink as base to avoid relying on options->index in theme context.
+                    $translateApiUrl = trim((string) ($archive->permalink ?? ''));
+                    if ($translateApiUrl === '') {
+                        $translateApiUrl = trim((string) ($archive->options->index ?? ''));
+                    }
                     if ($translateApiUrl !== '') {
                         $translateApiUrl .= (strpos($translateApiUrl, '?') === false ? '?' : '&') . 'classic22_translate=1';
                     }
