@@ -4,6 +4,15 @@
   const TOC_LIST_SELECTOR = '[data-post-toc-list]';
   const HEADING_SELECTOR = 'h1, h2, h3, h4, h5, h6';
 
+  function setTocState(toc, enabled) {
+    const layout = toc.closest('.classic22-post-layout');
+    if (layout) {
+      layout.classList.toggle('has-toc', Boolean(enabled));
+    }
+
+    toc.style.display = enabled ? '' : 'none';
+  }
+
   function slugify(text, index) {
     const normalized = (text || '')
       .trim()
@@ -23,7 +32,7 @@
     const headings = Array.from(content.querySelectorAll(HEADING_SELECTOR));
 
     if (!headings.length) {
-      toc.style.display = 'none';
+      setTocState(toc, false);
       return;
     }
 
@@ -55,9 +64,11 @@
     });
 
     if (!links.length) {
-      toc.style.display = 'none';
+      setTocState(toc, false);
       return;
     }
+
+    setTocState(toc, true);
 
     function setActiveByScroll() {
       const anchorTop = 110;
@@ -112,6 +123,7 @@
       return;
     }
 
+    setTocState(toc, false);
     buildToc(content, toc, tocList);
   }
 
@@ -121,4 +133,3 @@
     run();
   }
 })();
-
