@@ -1410,10 +1410,7 @@ function postMeta(
                 <li class="feather-folder"><?php $archive->category(', '); ?></li>
                 <li class="feather-message"><a href="<?php $archive->permalink() ?>#comments"  itemprop="discussionUrl"><?php $archive->commentsNum(_t('暂无评论'), _t('1 条评论'), _t('%d 条评论')); ?></a></li>
             </ul>
-            <div class="classic22-live-online-badge" data-live-online-card data-page-path="<?php echo htmlspecialchars($postPath, ENT_QUOTES, classic22ArchiveCharset($archive)); ?>" data-online-count="0" aria-label="在线人数">
-                <span class="classic22-live-online-icon" aria-hidden="true">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-activity-icon lucide-activity"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>
-                </span>
+            <div class="classic22-live-online-badge feather-activity" data-live-online-card data-page-path="<?php echo htmlspecialchars($postPath, ENT_QUOTES, classic22ArchiveCharset($archive)); ?>" data-online-count="0" aria-label="在线人数">
                 <span class="classic22-live-online-number" data-live-online-number>0</span>
             </div>
         </div>
