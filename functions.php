@@ -1389,6 +1389,72 @@ function themeInit($archive)
     classic22LinuxDoHandleRequest($archive);
 }
 
+function classic22PostTranslateLangOptions($options): array
+{
+    $defaultLang = 'zh';
+    $langs = [];
+    $enabled = false;
+    $translateEnabled = false;
+
+    try {
+        $enabled = (int) ($options->v3a_ai_enabled ?? 0) === 1;
+        $translateEnabled = (int) ($options->v3a_ai_translate_enabled ?? 0) === 1;
+    } catch (\Throwable $exception) {
+        $enabled = false;
+        $translateEnabled = false;
+    }
+
+    if ($enabled && $translateEnabled) {
+        $raw = '';
+        try {
+            $raw = trim((string) ($options->v3a_ai_languages ?? ''));
+        } catch (\Throwable $exception) {
+            $raw = '';
+        }
+
+        if ($raw !== '') {
+            if (class_exists('\\TypechoPlugin\\Vue3Admin\\Ai') && method_exists('\\TypechoPlugin\\Vue3Admin\\Ai', 'parseLanguages')) {
+                try {
+                    $langs = (array) \TypechoPlugin\Vue3Admin\Ai::parseLanguages($raw);
+                } catch (\Throwable $exception) {
+                    $langs = [];
+                }
+            } else {
+                $parts = preg_split('/[\\s,]+/u', $raw);
+                foreach ((array) $parts as $part) {
+                    $lang = strtolower(trim((string) $part));
+                    $lang = preg_replace('/[^0-9a-z-]+/i', '', $lang);
+                    $lang = is_string($lang) ? $lang : '';
+                    if ($lang === '') {
+                        continue;
+                    }
+                    if (!in_array($lang, $langs, true)) {
+                        $langs[] = $lang;
+                    }
+                }
+            }
+        }
+    }
+
+    $normalized = [];
+    foreach ($langs as $lang) {
+        $value = strtolower(trim((string) $lang));
+        if ($value === '') {
+            continue;
+        }
+        if (!in_array($value, $normalized, true)) {
+            $normalized[] = $value;
+        }
+    }
+
+    $normalized = array_values(array_filter($normalized, static function ($value) {
+        return $value !== 'zh';
+    }));
+
+    array_unshift($normalized, $defaultLang);
+    return $normalized;
+}
+
 function postMeta(
     \Widget\Archive $archive,
     string $metaType = 'archive'
@@ -1417,12 +1483,45 @@ function postMeta(
         </div>
         <?php endif; ?>
         <?php if ($metaType != 'page' && $metaType !== 'card'): ?>
+        <?php
+            $showTranslateSwitch = $metaType === 'post';
+            $translateLangOptions = ['zh'];
+            $translateRootPath = '';
+            $translateLangOptionsJson = '["zh"]';
+            if ($showTranslateSwitch) {
+                $translateLangOptions = classic22PostTranslateLangOptions($archive->options);
+                $translateLangOptionsJson = (string) (json_encode($translateLangOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '["zh"]');
+                try {
+                    $translateRootPath = (string) (parse_url((string) ($archive->options->rootUrl ?? ''), PHP_URL_PATH) ?? '');
+                } catch (\Throwable $exception) {
+                    $translateRootPath = '';
+                }
+                $translateRootPath = '/' . trim($translateRootPath, '/');
+                if ($translateRootPath === '/') {
+                    $translateRootPath = '';
+                }
+            }
+        ?>
+        <?php if ($showTranslateSwitch): ?>
+        <div class="classic22-post-meta-row">
+        <?php endif; ?>
         <ul class="entry-meta list-inline text-muted">
             <li class="feather-calendar"><time datetime="<?php $archive->date('c'); ?>" itemprop="datePublished"><?php $archive->date(); ?></time></li>
             <li class="feather-user" itemprop="author" itemscope itemtype="http://schema.org/Person"><a itemprop="name" href="<?php $archive->author->permalink(); ?>" rel="author"><?php $archive->author(); ?></a></li>
             <li class="feather-folder"><?php $archive->category(', '); ?></li>
             <li class="feather-message"><a href="<?php $archive->permalink() ?>#comments"  itemprop="discussionUrl"><?php $archive->commentsNum(_t('暂无评论'), _t('1 条评论'), _t('%d 条评论')); ?></a></li>
         </ul>
+        <?php if ($showTranslateSwitch): ?>
+        <label class="classic22-post-meta-lang text-muted" aria-label="切换语言">
+            <span class="classic22-post-meta-lang-label">语言</span>
+            <select data-post-lang-switch data-default-lang="zh" data-root-path="<?php echo htmlspecialchars($translateRootPath, ENT_QUOTES, classic22ArchiveCharset($archive)); ?>" data-langs="<?php echo htmlspecialchars($translateLangOptionsJson, ENT_QUOTES, classic22ArchiveCharset($archive)); ?>">
+                <?php foreach ($translateLangOptions as $langOption): ?>
+                <option value="<?php echo htmlspecialchars($langOption, ENT_QUOTES, classic22ArchiveCharset($archive)); ?>"<?php echo $langOption === 'zh' ? ' selected' : ''; ?>><?php echo htmlspecialchars($langOption, ENT_QUOTES, classic22ArchiveCharset($archive)); ?></option>
+                <?php endforeach; ?>
+            </select>
+        </label>
+        </div>
+        <?php endif; ?>
         <?php endif; ?>
     </header>
 <?php

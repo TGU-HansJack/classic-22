@@ -43,6 +43,7 @@ window.CLASSIC22_LIVE_WS = {
 
 <script src="<?php $this->options->themeUrl('static/js/home-announcements.js'); ?>" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/post-toc.js'); ?>" defer></script>
+<script src="<?php $this->options->themeUrl('static/js/post-lang-switch.js'); ?>" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/content-enhance.js'); ?>" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/live-socket.js'); ?>" defer></script>

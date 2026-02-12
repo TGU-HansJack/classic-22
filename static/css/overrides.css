@@ -55,6 +55,47 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23646b79' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719'/%3E%3C/svg%3E");
 }
 
+.classic22-post-meta-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.34rem;
+  text-align: center;
+}
+
+.classic22-post-meta-row .entry-meta {
+  flex: 0 0 auto;
+  margin-bottom: 0;
+}
+
+.classic22-post-meta-lang {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  white-space: nowrap;
+}
+
+.classic22-post-meta-lang-label {
+  font-size: 0.72rem;
+}
+
+.classic22-post-meta-lang select {
+  width: auto;
+  min-width: 3.4rem;
+  margin: 0;
+  padding: 0.14rem 1.35rem 0.14rem 0.44rem;
+  height: auto;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  text-align: center;
+  text-align-last: center;
+  -moz-text-align-last: center;
+  background-position: right 0.38rem center;
+}
+
 .site-navbar .nav-search-item {
   display: inline-flex;
   align-items: center;
