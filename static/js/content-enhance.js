@@ -208,4 +208,6 @@
   } else {
     run();
   }
+
+  document.addEventListener('classic22:postContentUpdated', run);
 })();

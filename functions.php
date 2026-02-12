@@ -1380,6 +1380,7 @@ function classic22LinuxDoHandleRequest($archive): void
 
 function themeInit($archive)
 {
+    classic22Vue3AdminTranslateHandleRequest($archive);
     classic22AiHandleRequest($archive);
 
     if (is_object($archive) && classic22LinuxDoIsConfigured($archive->options)) {
@@ -1389,25 +1390,249 @@ function themeInit($archive)
     classic22LinuxDoHandleRequest($archive);
 }
 
+function classic22Vue3AdminTranslateHandleRequest($archive): void
+{
+    if (!is_object($archive) || !isset($archive->request) || !isset($archive->options)) {
+        return;
+    }
+
+    $flag = trim((string) $archive->request->get('classic22_translate'));
+    if ($flag === '') {
+        return;
+    }
+
+    $cid = 0;
+    try {
+        $cid = (int) $archive->request->filter('int')->get('cid', 0);
+    } catch (\Throwable $exception) {
+        $cid = 0;
+    }
+    if ($cid <= 0) {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => '缺少文章 ID。',
+        ], 400);
+    }
+
+    $lang = '';
+    try {
+        $lang = strtolower(trim((string) $archive->request->get('lang')));
+    } catch (\Throwable $exception) {
+        $lang = '';
+    }
+    $lang = preg_replace('/[^0-9a-z-]+/i', '', $lang);
+    $lang = is_string($lang) ? $lang : '';
+    if ($lang === '') {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => '缺少语言参数。',
+        ], 400);
+    }
+
+    $allowedLangs = classic22PostTranslateLangOptions($archive->options);
+    if (!in_array($lang, $allowedLangs, true)) {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => '语言不受支持。',
+        ], 400);
+    }
+
+    $ctype = 'post';
+    $isMarkdown = false;
+
+    $contentRow = null;
+    try {
+        $db = classic22LinuxDoDb();
+        if (is_object($db)) {
+            $contentRow = $db->fetchRow(
+                $db->select(['cid', 'type', 'text', 'status', 'password', 'authorId'])
+                    ->from('table.contents')
+                    ->where('cid = ?', $cid)
+                    ->limit(1)
+            );
+        }
+    } catch (\Throwable $exception) {
+        $contentRow = null;
+    }
+
+    if (is_object($contentRow)) {
+        $contentRow = (array) $contentRow;
+    }
+
+    if (!is_array($contentRow)) {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => '文章不存在。',
+        ], 404);
+    }
+
+    $rawType = strtolower(trim((string) ($contentRow['type'] ?? '')));
+    if ($rawType === 'page' || $rawType === 'page_draft') {
+        $ctype = 'page';
+    } elseif ($rawType === 'post' || $rawType === 'post_draft') {
+        $ctype = 'post';
+    } else {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => '文章类型不支持。',
+        ], 404);
+    }
+
+    $rawText = (string) ($contentRow['text'] ?? '');
+    $isMarkdown = 0 === strpos($rawText, '<!--markdown-->');
+
+    $status = strtolower(trim((string) ($contentRow['status'] ?? '')));
+    $password = (string) ($contentRow['password'] ?? '');
+    $authorId = (int) ($contentRow['authorId'] ?? 0);
+
+    $userUid = 0;
+    $userIsEditor = false;
+    try {
+        if (class_exists('\\Widget\\User')) {
+            $user = \Widget\User::alloc();
+            $userUid = (int) ($user->uid ?? 0);
+            try {
+                $userIsEditor = (bool) $user->pass('editor', true);
+            } catch (\Throwable $exception) {
+                $userIsEditor = false;
+            }
+        }
+    } catch (\Throwable $exception) {
+        $userUid = 0;
+        $userIsEditor = false;
+    }
+
+    $userCanBypass = $userUid > 0 && ($userUid === $authorId || $userIsEditor);
+
+    // Avoid leaking unpublished/private content on a public endpoint.
+    if ($status !== 'publish' && !$userCanBypass) {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => '文章不存在。',
+        ], 404);
+    }
+
+    // Password-protected contents: require correct cookie unless author/editor.
+    if (trim($password) !== '' && !$userCanBypass) {
+        $cookiePassword = '';
+        try {
+            if (class_exists('\\Typecho\\Cookie')) {
+                $cookiePassword = (string) \Typecho\Cookie::get('protectPassword_' . $cid);
+            } elseif (class_exists('Typecho_Cookie')) {
+                $cookiePassword = (string) \Typecho_Cookie::get('protectPassword_' . $cid);
+            }
+        } catch (\Throwable $exception) {
+            $cookiePassword = '';
+        }
+
+        if ($cookiePassword !== $password) {
+            classic22AiSendJson([
+                'ok' => false,
+                'message' => '此内容被密码保护。',
+            ], 403);
+        }
+    }
+
+    if (!class_exists('\\TypechoPlugin\\Vue3Admin\\Ai')) {
+        $aiFile = __TYPECHO_ROOT_DIR__ . '/usr/plugins/Vue3Admin/Ai.php';
+        if (is_file($aiFile)) {
+            require_once $aiFile;
+        }
+    }
+
+    if (!class_exists('\\TypechoPlugin\\Vue3Admin\\Ai') || !method_exists('\\TypechoPlugin\\Vue3Admin\\Ai', 'getTranslation')) {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => 'Vue3Admin 翻译功能不可用。',
+        ], 500);
+    }
+
+    try {
+        $translation = \TypechoPlugin\Vue3Admin\Ai::getTranslation($cid, $ctype, $lang);
+    } catch (\Throwable $exception) {
+        $translation = null;
+    }
+
+    if (!is_array($translation)) {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => '暂无该语言翻译内容。',
+        ], 404);
+    }
+
+    $title = trim((string) ($translation['title'] ?? ''));
+    $text = (string) ($translation['text'] ?? '');
+    if (trim($text) === '') {
+        classic22AiSendJson([
+            'ok' => false,
+            'message' => '翻译内容为空。',
+        ], 404);
+    }
+
+    if ($isMarkdown) {
+        if (0 === strpos($text, '<!--markdown-->')) {
+            $text = substr($text, 15);
+        }
+        $html = \Utils\Markdown::convert($text);
+    } else {
+        $autoP = new \Utils\AutoP();
+        $html = $autoP->parse($text);
+    }
+
+    try {
+        $html = (string) \Typecho\Common::fixHtml($html);
+    } catch (\Throwable $exception) {
+    }
+
+    classic22AiSendJson([
+        'ok' => true,
+        'cid' => $cid,
+        'ctype' => $ctype,
+        'lang' => $lang,
+        'title' => $title,
+        'html' => $html,
+        'updated' => (int) ($translation['updated'] ?? 0),
+        'model' => (string) ($translation['model'] ?? ''),
+    ]);
+}
+
 function classic22PostTranslateLangOptions($options): array
 {
     $defaultLang = 'zh';
+    $optionsBag = $options;
     $langs = [];
-    $enabled = false;
-    $translateEnabled = false;
 
     try {
-        $enabled = (int) ($options->v3a_ai_enabled ?? 0) === 1;
-        $translateEnabled = (int) ($options->v3a_ai_translate_enabled ?? 0) === 1;
+        if (class_exists('\\Widget\\Options')) {
+            $optionsBag = \Widget\Options::alloc();
+        }
     } catch (\Throwable $exception) {
-        $enabled = false;
-        $translateEnabled = false;
+        $optionsBag = $options;
     }
 
-    if ($enabled && $translateEnabled) {
+    if (!class_exists('\\TypechoPlugin\\Vue3Admin\\Ai')) {
+        $aiFile = __TYPECHO_ROOT_DIR__ . '/usr/plugins/Vue3Admin/Ai.php';
+        if (is_file($aiFile)) {
+            require_once $aiFile;
+        }
+    }
+
+    if (class_exists('\\TypechoPlugin\\Vue3Admin\\Ai') && method_exists('\\TypechoPlugin\\Vue3Admin\\Ai', 'getConfig')) {
+        try {
+            $cfg = (array) \TypechoPlugin\Vue3Admin\Ai::getConfig($optionsBag);
+            $cfgLangs = $cfg['languages'] ?? [];
+            if (is_array($cfgLangs) && !empty($cfgLangs)) {
+                $langs = $cfgLangs;
+            }
+        } catch (\Throwable $exception) {
+            $langs = [];
+        }
+    }
+
+    if (empty($langs)) {
         $raw = '';
         try {
-            $raw = trim((string) ($options->v3a_ai_languages ?? ''));
+            $raw = trim((string) ($optionsBag->v3a_ai_languages ?? ''));
         } catch (\Throwable $exception) {
             $raw = '';
         }
@@ -1437,7 +1662,7 @@ function classic22PostTranslateLangOptions($options): array
     }
 
     $normalized = [];
-    foreach ($langs as $lang) {
+    foreach ((array) $langs as $lang) {
         $value = strtolower(trim((string) $lang));
         if ($value === '') {
             continue;
@@ -1447,8 +1672,8 @@ function classic22PostTranslateLangOptions($options): array
         }
     }
 
-    $normalized = array_values(array_filter($normalized, static function ($value) {
-        return $value !== 'zh';
+    $normalized = array_values(array_filter($normalized, static function ($value) use ($defaultLang) {
+        return $value !== $defaultLang;
     }));
 
     array_unshift($normalized, $defaultLang);
@@ -1485,20 +1710,29 @@ function postMeta(
         <?php if ($metaType != 'page' && $metaType !== 'card'): ?>
         <?php
             $showTranslateSwitch = $metaType === 'post';
+            $translateDefaultLang = 'zh';
             $translateLangOptions = ['zh'];
-            $translateRootPath = '';
             $translateLangOptionsJson = '["zh"]';
+            $translateCurrentLang = $translateDefaultLang;
+            $translateApiUrl = '';
+            $translateCid = (int) ($archive->cid ?? 0);
+            $translateCtype = $metaType === 'post' ? 'post' : 'post';
+            $translateIsMarkdown = 0;
             if ($showTranslateSwitch) {
                 $translateLangOptions = classic22PostTranslateLangOptions($archive->options);
                 $translateLangOptionsJson = (string) (json_encode($translateLangOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '["zh"]');
                 try {
-                    $translateRootPath = (string) (parse_url((string) ($archive->options->rootUrl ?? ''), PHP_URL_PATH) ?? '');
+                    $translateApiUrl = trim((string) ($archive->options->index ?? ''));
+                    if ($translateApiUrl !== '') {
+                        $translateApiUrl .= (strpos($translateApiUrl, '?') === false ? '?' : '&') . 'classic22_translate=1';
+                    }
                 } catch (\Throwable $exception) {
-                    $translateRootPath = '';
+                    $translateApiUrl = '';
                 }
-                $translateRootPath = '/' . trim($translateRootPath, '/');
-                if ($translateRootPath === '/') {
-                    $translateRootPath = '';
+                $translateCurrentLang = $translateDefaultLang;
+                $translateIsMarkdown = $archive->isMarkdown ? 1 : 0;
+                if (count($translateLangOptions) <= 1) {
+                    $showTranslateSwitch = false;
                 }
             }
         ?>
@@ -1514,9 +1748,21 @@ function postMeta(
         <?php if ($showTranslateSwitch): ?>
         <label class="classic22-post-meta-lang text-muted" aria-label="切换语言">
             <span class="classic22-post-meta-lang-label">语言</span>
-            <select data-post-lang-switch data-default-lang="zh" data-root-path="<?php echo htmlspecialchars($translateRootPath, ENT_QUOTES, classic22ArchiveCharset($archive)); ?>" data-langs="<?php echo htmlspecialchars($translateLangOptionsJson, ENT_QUOTES, classic22ArchiveCharset($archive)); ?>">
+            <select
+                data-post-lang-switch
+                data-default-lang="<?php echo htmlspecialchars($translateDefaultLang, ENT_QUOTES, classic22ArchiveCharset($archive)); ?>"
+                data-current-lang="<?php echo htmlspecialchars($translateCurrentLang, ENT_QUOTES, classic22ArchiveCharset($archive)); ?>"
+                data-langs="<?php echo htmlspecialchars($translateLangOptionsJson, ENT_QUOTES, classic22ArchiveCharset($archive)); ?>"
+                data-translate-api="<?php echo htmlspecialchars($translateApiUrl, ENT_QUOTES, classic22ArchiveCharset($archive)); ?>"
+                data-translate-cid="<?php echo (int) $translateCid; ?>"
+                data-translate-ctype="<?php echo htmlspecialchars($translateCtype, ENT_QUOTES, classic22ArchiveCharset($archive)); ?>"
+                data-translate-markdown="<?php echo (int) $translateIsMarkdown; ?>"
+            >
                 <?php foreach ($translateLangOptions as $langOption): ?>
-                <option value="<?php echo htmlspecialchars($langOption, ENT_QUOTES, classic22ArchiveCharset($archive)); ?>"<?php echo $langOption === 'zh' ? ' selected' : ''; ?>><?php echo htmlspecialchars($langOption, ENT_QUOTES, classic22ArchiveCharset($archive)); ?></option>
+                <?php
+                    $langOptionValue = strtolower(trim((string) $langOption));
+                ?>
+                <option value="<?php echo htmlspecialchars($langOptionValue, ENT_QUOTES, classic22ArchiveCharset($archive)); ?>"<?php echo $langOptionValue === $translateCurrentLang ? ' selected' : ''; ?>><?php echo htmlspecialchars($langOptionValue, ENT_QUOTES, classic22ArchiveCharset($archive)); ?></option>
                 <?php endforeach; ?>
             </select>
         </label>

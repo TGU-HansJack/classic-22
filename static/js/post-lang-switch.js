@@ -27,66 +27,37 @@
     }
   }
 
-  function trimSlashes(value) {
-    return String(value || '').replace(/^\/+|\/+$/g, '');
+  function sanitizeLang(raw) {
+    var value = String(raw || '').trim().toLowerCase();
+    value = value.replace(/[^0-9a-z-]+/g, '');
+    return value;
   }
 
-  function normalizeRootPath(raw) {
-    var value = String(raw || '').trim();
-    if (!value || value === '/') {
+  function buildUrl(baseUrl, params) {
+    try {
+      var url = new URL(baseUrl, window.location.href);
+      Object.keys(params || {}).forEach(function (key) {
+        url.searchParams.set(key, params[key]);
+      });
+      return url.toString();
+    } catch (err) {
       return '';
     }
-
-    value = value.replace(/\\/g, '/');
-    if (value.charAt(0) !== '/') {
-      value = '/' + value;
-    }
-    value = value.replace(/\/+$/, '');
-    return value === '/' ? '' : value;
   }
 
-  function splitPath(pathname, rootPath, langs, defaultLang) {
-    var path = String(pathname || '/');
-
-    if (rootPath && (path === rootPath || path.indexOf(rootPath + '/') === 0)) {
-      path = path.slice(rootPath.length);
-    }
-
-    path = trimSlashes(path);
-    if (!path) {
-      return { lang: defaultLang, rest: '' };
-    }
-
-    var parts = path.split('/').filter(function (item) {
-      return item !== '';
-    });
-
-    var lang = defaultLang;
-    if (parts.length > 0 && langs.indexOf(parts[0]) !== -1) {
-      lang = parts.shift();
-    }
-
-    return {
-      lang: lang,
-      rest: parts.join('/')
-    };
+  function getTitleNode() {
+    return document.querySelector('.entry-title a') || document.querySelector('.entry-title');
   }
 
-  function buildPath(rootPath, rest, lang, defaultLang) {
-    var relParts = [];
-    if (lang !== defaultLang) {
-      relParts.push(lang);
-    }
-    if (rest) {
-      relParts.push(trimSlashes(rest));
-    }
+  function getContentBodyNode() {
+    return document.querySelector('[data-post-content-body]') || document.querySelector('[data-post-content]');
+  }
 
-    var rel = relParts.join('/');
-    if (rootPath) {
-      return rel ? rootPath + '/' + rel : rootPath + '/';
+  function dispatchUpdated(lang) {
+    try {
+      document.dispatchEvent(new CustomEvent('classic22:postContentUpdated', { detail: { lang: lang } }));
+    } catch (err) {
     }
-
-    return rel ? '/' + rel : '/';
   }
 
   function run() {
@@ -95,33 +66,119 @@
       return;
     }
 
-    var defaultLang = String(select.getAttribute('data-default-lang') || 'zh').trim().toLowerCase();
-    if (!defaultLang) {
-      defaultLang = 'zh';
-    }
-
+    var defaultLang = sanitizeLang(select.getAttribute('data-default-lang') || 'zh') || 'zh';
     var langs = parseLangs(select.getAttribute('data-langs') || '');
     if (langs.indexOf(defaultLang) === -1) {
       langs.unshift(defaultLang);
     }
 
-    var rootPath = normalizeRootPath(select.getAttribute('data-root-path') || '');
-    var current = splitPath(window.location.pathname, rootPath, langs, defaultLang);
-    select.value = langs.indexOf(current.lang) !== -1 ? current.lang : defaultLang;
+    var apiUrl = String(select.getAttribute('data-translate-api') || '').trim();
+    var cid = parseInt(String(select.getAttribute('data-translate-cid') || '0'), 10) || 0;
+    var ctype = sanitizeLang(select.getAttribute('data-translate-ctype') || 'post') || 'post';
+
+    var titleNode = getTitleNode();
+    var contentNode = getContentBodyNode();
+    if (!titleNode || !contentNode || !apiUrl || cid <= 0) {
+      return;
+    }
+
+    var originalTitle = titleNode.textContent || '';
+    var originalHtml = contentNode.innerHTML;
+    var cache = {};
+    var controller = null;
+
+    function setBusy(busy) {
+      select.disabled = Boolean(busy);
+      select.setAttribute('aria-busy', busy ? 'true' : 'false');
+    }
+
+    function applyContent(nextTitle, nextHtml, lang) {
+      if (typeof nextTitle === 'string' && nextTitle.trim()) {
+        titleNode.textContent = nextTitle;
+      } else {
+        titleNode.textContent = originalTitle;
+      }
+
+      if (typeof nextHtml === 'string') {
+        contentNode.innerHTML = nextHtml;
+      }
+
+      dispatchUpdated(lang);
+    }
+
+    function restore() {
+      select.value = defaultLang;
+      applyContent(originalTitle, originalHtml, defaultLang);
+    }
+
+    function fetchAndApply(lang) {
+      if (cache[lang]) {
+        applyContent(cache[lang].title, cache[lang].html, lang);
+        return;
+      }
+
+      if (controller && controller.abort) {
+        controller.abort();
+      }
+      controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+
+      var url = buildUrl(apiUrl, {
+        cid: String(cid),
+        ctype: ctype,
+        lang: lang
+      });
+      if (!url) {
+        restore();
+        return;
+      }
+
+      setBusy(true);
+
+      fetch(url, {
+        method: 'GET',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json'
+        },
+        signal: controller ? controller.signal : undefined
+      })
+        .then(function (response) {
+          if (!response.ok) {
+            return null;
+          }
+          return response.json();
+        })
+        .then(function (data) {
+          if (!data || !data.ok) {
+            restore();
+            return;
+          }
+
+          var title = typeof data.title === 'string' ? data.title : '';
+          var html = typeof data.html === 'string' ? data.html : '';
+          cache[lang] = { title: title, html: html };
+          applyContent(title, html, lang);
+        })
+        .catch(function () {
+          restore();
+        })
+        .finally(function () {
+          setBusy(false);
+        });
+    }
 
     select.addEventListener('change', function () {
-      var selectedLang = String(select.value || defaultLang).trim().toLowerCase();
-      if (langs.indexOf(selectedLang) === -1) {
-        selectedLang = defaultLang;
+      var lang = sanitizeLang(select.value || defaultLang) || defaultLang;
+      if (langs.indexOf(lang) === -1) {
+        lang = defaultLang;
       }
 
-      var now = splitPath(window.location.pathname, rootPath, langs, defaultLang);
-      var nextPath = buildPath(rootPath, now.rest, selectedLang, defaultLang);
-      var nextUrl = nextPath + window.location.search + window.location.hash;
-      var currentUrl = window.location.pathname + window.location.search + window.location.hash;
-      if (nextUrl !== currentUrl) {
-        window.location.assign(nextUrl);
+      if (lang === defaultLang) {
+        restore();
+        return;
       }
+
+      fetchAndApply(lang);
     });
   }
 

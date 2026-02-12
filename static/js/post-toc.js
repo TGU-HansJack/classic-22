@@ -4,6 +4,9 @@
   const TOC_LIST_SELECTOR = '[data-post-toc-list]';
   const HEADING_SELECTOR = 'h1, h2, h3, h4, h5, h6';
 
+  let scrollHandler = null;
+  let clickBound = false;
+
   function setTocState(toc, enabled) {
     const layout = toc.closest('.classic22-post-layout');
     if (layout) {
@@ -29,6 +32,13 @@
   }
 
   function buildToc(content, toc, tocList) {
+    tocList.innerHTML = '';
+
+    if (scrollHandler) {
+      document.removeEventListener('scroll', scrollHandler);
+      scrollHandler = null;
+    }
+
     const headings = Array.from(content.querySelectorAll(HEADING_SELECTOR));
 
     if (!headings.length) {
@@ -70,7 +80,7 @@
 
     setTocState(toc, true);
 
-    function setActiveByScroll() {
+    scrollHandler = function setActiveByScroll() {
       const anchorTop = 110;
       let activeIndex = 0;
 
@@ -85,33 +95,36 @@
       links.forEach((entry, index) => {
         entry.link.classList.toggle('is-active', index === activeIndex);
       });
+    };
+
+    scrollHandler();
+    document.addEventListener('scroll', scrollHandler, { passive: true });
+
+    if (!clickBound) {
+      clickBound = true;
+      tocList.addEventListener('click', (event) => {
+        const link = event.target.closest('a.classic22-post-toc-link');
+        if (!link) {
+          return;
+        }
+
+        const hash = link.getAttribute('href');
+        if (!hash || hash.charAt(0) !== '#') {
+          return;
+        }
+
+        const target = document.getElementById(hash.slice(1));
+        if (!target) {
+          return;
+        }
+
+        event.preventDefault();
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, '', hash);
+        }
+      });
     }
-
-    setActiveByScroll();
-    document.addEventListener('scroll', setActiveByScroll, { passive: true });
-
-    tocList.addEventListener('click', (event) => {
-      const link = event.target.closest('a.classic22-post-toc-link');
-      if (!link) {
-        return;
-      }
-
-      const hash = link.getAttribute('href');
-      if (!hash || hash.charAt(0) !== '#') {
-        return;
-      }
-
-      const target = document.getElementById(hash.slice(1));
-      if (!target) {
-        return;
-      }
-
-      event.preventDefault();
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      if (window.history && window.history.replaceState) {
-        window.history.replaceState(null, '', hash);
-      }
-    });
   }
 
   function run() {
@@ -132,4 +145,6 @@
   } else {
     run();
   }
+
+  document.addEventListener('classic22:postContentUpdated', run);
 })();

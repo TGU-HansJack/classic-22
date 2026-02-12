@@ -34,7 +34,9 @@ $classic22PostAiArticlesApiUrl = $classic22PostAiEnabled
                 <?php postMeta($this, 'post'); ?>
 
                 <div class="entry-content fmt" itemprop="articleBody" data-post-content>
-                    <?php $this->content(); ?>
+                    <div data-post-content-body>
+                        <?php $this->content(); ?>
+                    </div>
                     <p itemprop="keywords"><?php _e('标签'); ?>：<?php $this->tags(', ', true, _t('无')); ?></p>
                 </div>
             </article>
