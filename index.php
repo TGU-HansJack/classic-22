@@ -36,6 +36,34 @@ $classic22TimelineRankings = is_array($classic22TimelineData['rankings'] ?? null
 $classic22TimelineViewRanks = is_array($classic22TimelineRankings['views'] ?? null) ? $classic22TimelineRankings['views'] : [];
 $classic22TimelineCommentRanks = is_array($classic22TimelineRankings['comments'] ?? null) ? $classic22TimelineRankings['comments'] : [];
 $classic22TimelineUpdatedAt = trim((string) ($classic22TimelineData['updatedAt'] ?? ''));
+$classic22TrafficData = function_exists('classic22TrafficHomeData') ? classic22TrafficHomeData($this, 14, 5, 8) : [
+    'windowDays' => 14,
+    'referringSites' => [],
+    'popularContent' => [],
+];
+$classic22TrafficWindowDays = (int) ($classic22TrafficData['windowDays'] ?? 14);
+$classic22TrafficTimezone = (int) ($this->options->timezone ?? 0);
+$classic22TrafficTrend = is_array($classic22TrafficData['trend'] ?? null) ? $classic22TrafficData['trend'] : [];
+$classic22TrafficReferringSites = is_array($classic22TrafficData['referringSites'] ?? null) ? $classic22TrafficData['referringSites'] : [];
+$classic22TrafficPopularContent = is_array($classic22TrafficData['popularContent'] ?? null) ? $classic22TrafficData['popularContent'] : [];
+$classic22TrafficViewsTotal = 0;
+$classic22TrafficUvTotal = 0;
+foreach ($classic22TrafficTrend as $row) {
+    if (!is_array($row)) {
+        continue;
+    }
+    $classic22TrafficViewsTotal += (int) ($row['views'] ?? 0);
+    $classic22TrafficUvTotal += (int) ($row['uv'] ?? 0);
+}
+$classic22TrafficBootstrap = [
+    'windowDays' => $classic22TrafficWindowDays > 0 ? $classic22TrafficWindowDays : 14,
+    'tz' => $classic22TrafficTimezone,
+    'trend' => $classic22TrafficTrend,
+    'referringSites' => $classic22TrafficReferringSites,
+    'popularContent' => $classic22TrafficPopularContent,
+    'totalViews' => $classic22TrafficViewsTotal,
+    'totalUv' => $classic22TrafficUvTotal,
+];
 ?>
 
 <main class="container-fluid">
@@ -124,7 +152,108 @@ $classic22TimelineUpdatedAt = trim((string) ($classic22TimelineData['updatedAt']
             </section>
         <?php endif; ?>
 
-        <aside class="classic22-home-sidebar" aria-label="首页侧边栏">
+        <aside class="classic22-home-sidebar classic22-home-sidebar--left" aria-label="首页左侧栏">
+            <section class="classic22-home-sidebar-card classic22-home-traffic-card" aria-label="浏览 Traffic">
+                <h3 class="classic22-home-sidebar-title">Total views in last <?php echo $classic22TrafficBootstrap['windowDays']; ?> days</h3>
+                <p class="classic22-home-sidebar-meta"><?php echo number_format($classic22TrafficViewsTotal); ?> Views</p>
+
+                <?php if (!empty($classic22TrafficTrend)): ?>
+                    <div class="classic22-home-traffic-echarts-wrap" aria-label="Total views chart">
+                        <div class="classic22-home-traffic-echarts classic22-home-traffic-echarts--trend" data-home-traffic-trend-chart></div>
+                    </div>
+                <?php else: ?>
+                    <div class="classic22-home-traffic-empty">暂无趋势数据</div>
+                <?php endif; ?>
+
+                <div class="classic22-home-traffic-group">
+                    <h4 class="classic22-home-traffic-subtitle">Referring sites</h4>
+                    <?php if (!empty($classic22TrafficReferringSites)): ?>
+                        <div class="classic22-home-traffic-echarts-wrap" aria-label="Referring sites chart">
+                            <div class="classic22-home-traffic-echarts classic22-home-traffic-echarts--bar" data-home-traffic-referring-chart></div>
+                        </div>
+                    <?php endif; ?>
+                    <div class="classic22-home-traffic-head">
+                        <span>Site</span>
+                        <span>Views</span>
+                        <span>UV</span>
+                    </div>
+                    <ol class="classic22-home-traffic-list">
+                        <?php if (!empty($classic22TrafficReferringSites)): ?>
+                            <?php foreach ($classic22TrafficReferringSites as $item): ?>
+                                <?php
+                                    $site = trim((string) ($item['site'] ?? ''));
+                                    $views = (int) ($item['views'] ?? 0);
+                                    $uv = (int) ($item['uv'] ?? 0);
+                                    $siteLink = $site !== '' ? ('https://' . ltrim($site, '/')) : '';
+                                ?>
+                                <li class="classic22-home-traffic-item">
+                                    <?php if ($siteLink !== ''): ?>
+                                        <a class="classic22-home-traffic-title" href="<?php echo htmlspecialchars($siteLink, ENT_QUOTES, $this->options->charset); ?>" target="_blank" rel="noreferrer noopener">
+                                            <?php echo htmlspecialchars($site !== '' ? $site : '—', ENT_QUOTES, $this->options->charset); ?>
+                                        </a>
+                                    <?php else: ?>
+                                        <span class="classic22-home-traffic-title"><?php echo htmlspecialchars($site !== '' ? $site : '—', ENT_QUOTES, $this->options->charset); ?></span>
+                                    <?php endif; ?>
+                                    <span class="classic22-home-traffic-count"><?php echo number_format($views); ?></span>
+                                    <span class="classic22-home-traffic-count"><?php echo number_format($uv); ?></span>
+                                </li>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <li class="classic22-home-traffic-item is-empty">
+                                <span class="classic22-home-traffic-title">暂无来源数据</span>
+                            </li>
+                        <?php endif; ?>
+                    </ol>
+                </div>
+
+                <div class="classic22-home-traffic-group">
+                    <h4 class="classic22-home-traffic-subtitle">Popular content</h4>
+                    <?php if (!empty($classic22TrafficPopularContent)): ?>
+                        <div class="classic22-home-traffic-echarts-wrap" aria-label="Popular content chart">
+                            <div class="classic22-home-traffic-echarts classic22-home-traffic-echarts--bar" data-home-traffic-popular-chart></div>
+                        </div>
+                    <?php endif; ?>
+                    <div class="classic22-home-traffic-head">
+                        <span>Content</span>
+                        <span>Views</span>
+                        <span>UV</span>
+                    </div>
+                    <ol class="classic22-home-traffic-list">
+                        <?php if (!empty($classic22TrafficPopularContent)): ?>
+                            <?php foreach ($classic22TrafficPopularContent as $item): ?>
+                                <?php
+                                    $title = trim((string) ($item['title'] ?? ''));
+                                    $link = trim((string) ($item['link'] ?? ''));
+                                    $views = (int) ($item['views'] ?? 0);
+                                    $uv = (int) ($item['uv'] ?? 0);
+                                ?>
+                                <li class="classic22-home-traffic-item">
+                                    <?php if ($link !== ''): ?>
+                                        <a class="classic22-home-traffic-title" href="<?php echo htmlspecialchars($link, ENT_QUOTES, $this->options->charset); ?>" target="_blank" rel="noreferrer">
+                                            <?php echo htmlspecialchars($title !== '' ? $title : '—', ENT_QUOTES, $this->options->charset); ?>
+                                        </a>
+                                    <?php else: ?>
+                                        <span class="classic22-home-traffic-title"><?php echo htmlspecialchars($title !== '' ? $title : '—', ENT_QUOTES, $this->options->charset); ?></span>
+                                    <?php endif; ?>
+                                    <span class="classic22-home-traffic-count"><?php echo number_format($views); ?></span>
+                                    <span class="classic22-home-traffic-count"><?php echo number_format($uv); ?></span>
+                                </li>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <li class="classic22-home-traffic-item is-empty">
+                                <span class="classic22-home-traffic-title">暂无热门内容</span>
+                            </li>
+                        <?php endif; ?>
+                    </ol>
+                </div>
+
+                <?php if (!empty($classic22TrafficTrend) || !empty($classic22TrafficReferringSites) || !empty($classic22TrafficPopularContent)): ?>
+                    <script type="application/json" data-home-traffic-bootstrap><?php echo json_encode($classic22TrafficBootstrap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?></script>
+                <?php endif; ?>
+            </section>
+        </aside>
+
+        <aside class="classic22-home-sidebar classic22-home-sidebar--right" aria-label="首页右侧栏">
             <section class="classic22-home-sidebar-card classic22-home-timeline-card" aria-label="站点动态时间线">
                 <h3 class="classic22-home-sidebar-title">站点动态时间线</h3>
                 <?php if ($classic22TimelineUpdatedAt !== ''): ?>

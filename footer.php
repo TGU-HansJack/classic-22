@@ -6,6 +6,16 @@ $liveWsEndpoint = trim((string) $liveWsEndpoint);
 if ($liveWsEndpoint === '') {
     $liveWsEndpoint = '/ws';
 }
+$echartsCdn = '';
+try {
+    $pluginOptions = $this->options->plugin('Vue3Admin');
+    $echartsCdn = trim((string) ($pluginOptions->echartsCdn ?? ''));
+} catch (\Throwable $e) {
+    $echartsCdn = '';
+}
+if ($echartsCdn === '') {
+    $echartsCdn = 'https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js';
+}
 ?>
 <footer class="site-footer container-fluid">
     <div class="d-flex justify-content-between">
@@ -45,6 +55,8 @@ window.CLASSIC22_LIVE_WS = {
 <script src="<?php $this->options->themeUrl('static/js/post-toc.js'); ?>" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/post-lang-switch.js'); ?>" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js" defer></script>
+<script src="<?php echo htmlspecialchars($echartsCdn, ENT_QUOTES); ?>" defer></script>
+<script src="<?php $this->options->themeUrl('static/js/home-traffic.js'); ?>" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/content-enhance.js'); ?>" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/live-socket.js'); ?>" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/home-ai-chat.js'); ?>" defer></script>

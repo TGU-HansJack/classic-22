@@ -1930,6 +1930,338 @@ function classic22AiFetchPostViewCounts($db, int $limit = 300): array
     return $counts;
 }
 
+function classic22TrafficNormalizeHost(string $host): string
+{
+    $host = strtolower(trim($host));
+    if ($host === '') {
+        return '';
+    }
+
+    $host = preg_replace('/:\d+$/', '', $host);
+    $host = preg_replace('/^www\./', '', (string) $host);
+    return (string) trim((string) $host, '.');
+}
+
+function classic22TrafficExtractHost(string $referer): string
+{
+    $referer = trim($referer);
+    if ($referer === '') {
+        return '';
+    }
+
+    if (strpos($referer, '//') === 0) {
+        $referer = 'http:' . $referer;
+    }
+
+    $host = '';
+    try {
+        $parsed = @parse_url($referer);
+        if (is_array($parsed)) {
+            $host = (string) ($parsed['host'] ?? '');
+        }
+    } catch (\Throwable $exception) {
+        $host = '';
+    }
+
+    if ($host === '') {
+        try {
+            $parsed = @parse_url('http://' . ltrim($referer, '/'));
+            if (is_array($parsed)) {
+                $host = (string) ($parsed['host'] ?? '');
+            }
+        } catch (\Throwable $exception) {
+            $host = '';
+        }
+    }
+
+    return classic22TrafficNormalizeHost($host);
+}
+
+function classic22TrafficIsInternalHost(string $host, string $siteHost): bool
+{
+    $host = classic22TrafficNormalizeHost($host);
+    $siteHost = classic22TrafficNormalizeHost($siteHost);
+    if ($host === '' || $siteHost === '') {
+        return false;
+    }
+
+    if ($host === $siteHost) {
+        return true;
+    }
+
+    return substr($host, -strlen('.' . $siteHost)) === ('.' . $siteHost)
+        || substr($siteHost, -strlen('.' . $host)) === ('.' . $host);
+}
+
+/**
+ * @param \Widget\Archive $archive
+ * @return array{windowDays:int,trend:array<int,array{ts:int,views:int,uv:int}>,referringSites:array<int,array{site:string,views:int,uv:int}>,popularContent:array<int,array{cid:?int,title:string,link:string,views:int,uv:int}>}
+ */
+function classic22TrafficHomeData($archive, int $windowDays = 14, int $siteLimit = 5, int $contentLimit = 8): array
+{
+    $windowDays = max(1, min(90, (int) $windowDays));
+    $siteLimit = max(1, min(20, (int) $siteLimit));
+    $contentLimit = max(1, min(20, (int) $contentLimit));
+
+    $result = [
+        'windowDays' => $windowDays,
+        'trend' => [],
+        'referringSites' => [],
+        'popularContent' => [],
+    ];
+
+    try {
+        if (!class_exists('\\TypechoPlugin\\Vue3Admin\\LocalStorage')) {
+            $file = __TYPECHO_ROOT_DIR__ . '/usr/plugins/Vue3Admin/LocalStorage.php';
+            if (is_file($file)) {
+                require_once $file;
+            }
+        }
+    } catch (\Throwable $exception) {
+    }
+
+    $pdo = null;
+    try {
+        if (class_exists('\\TypechoPlugin\\Vue3Admin\\LocalStorage')) {
+            $pdo = \TypechoPlugin\Vue3Admin\LocalStorage::pdo();
+        }
+    } catch (\Throwable $exception) {
+        $pdo = null;
+    }
+
+    if (!($pdo instanceof \PDO)) {
+        return $result;
+    }
+
+    $tz = 0;
+    try {
+        if (is_object($archive) && isset($archive->options)) {
+            $tz = (int) ($archive->options->timezone ?? 0);
+        }
+    } catch (\Throwable $exception) {
+        $tz = 0;
+    }
+
+    $now = time();
+    $todayStart = (int) (floor(($now + $tz) / 86400) * 86400 - $tz);
+    $trendStart = $todayStart - max(0, $windowDays - 1) * 86400;
+    $trendEnd = $todayStart + 86400;
+    $since = $trendStart;
+
+    $bucketStart = (int) floor(($trendStart + $tz) / 86400);
+    $trendByBucket = [];
+    for ($i = 0; $i < $windowDays; $i++) {
+        $bucket = $bucketStart + $i;
+        $trendByBucket[$bucket] = [
+            'ts' => $bucket * 86400 - $tz,
+            'views' => 0,
+            'uv' => 0,
+        ];
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT CAST((created + :tz) / 86400 AS INTEGER) AS bucket, COUNT(*) AS views, COUNT(DISTINCT ip) AS uv
+             FROM v3a_visit_log
+             WHERE created >= :start AND created < :end
+             GROUP BY bucket
+             ORDER BY bucket ASC'
+        );
+        $stmt->bindValue(':tz', (int) $tz, \PDO::PARAM_INT);
+        $stmt->bindValue(':start', (int) $trendStart, \PDO::PARAM_INT);
+        $stmt->bindValue(':end', (int) $trendEnd, \PDO::PARAM_INT);
+        $stmt->execute();
+        foreach ((array) $stmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $bucket = (int) ($row['bucket'] ?? 0);
+            if (!isset($trendByBucket[$bucket])) {
+                continue;
+            }
+            $trendByBucket[$bucket]['views'] = (int) ($row['views'] ?? 0);
+            $trendByBucket[$bucket]['uv'] = (int) ($row['uv'] ?? 0);
+        }
+    } catch (\Throwable $exception) {
+    }
+    $result['trend'] = array_values($trendByBucket);
+
+    $siteHost = '';
+    try {
+        $siteUrl = is_object($archive) && isset($archive->options) ? (string) ($archive->options->siteUrl ?? '') : '';
+        if ($siteUrl !== '') {
+            $siteHost = classic22TrafficNormalizeHost((string) (parse_url($siteUrl, PHP_URL_HOST) ?? ''));
+        }
+    } catch (\Throwable $exception) {
+        $siteHost = '';
+    }
+
+    $siteMap = [];
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT ip, referer, COUNT(*) AS views FROM v3a_visit_log
+             WHERE created >= :since AND referer IS NOT NULL AND referer <> ""'
+             . ' GROUP BY referer, ip'
+        );
+        $stmt->execute([':since' => $since]);
+        foreach ((array) $stmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $host = classic22TrafficExtractHost((string) ($row['referer'] ?? ''));
+            if ($host === '') {
+                continue;
+            }
+            if ($siteHost !== '' && classic22TrafficIsInternalHost($host, $siteHost)) {
+                continue;
+            }
+
+            if (!isset($siteMap[$host])) {
+                $siteMap[$host] = [
+                    'site' => $host,
+                    'views' => 0,
+                    'ips' => [],
+                ];
+            }
+
+            $siteMap[$host]['views'] += max(1, (int) ($row['views'] ?? 0));
+            $ip = trim((string) ($row['ip'] ?? ''));
+            if ($ip !== '') {
+                $siteMap[$host]['ips'][$ip] = 1;
+            }
+        }
+    } catch (\Throwable $exception) {
+        $siteMap = [];
+    }
+
+    $referringSites = [];
+    foreach ($siteMap as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $referringSites[] = [
+            'site' => (string) ($row['site'] ?? ''),
+            'views' => (int) ($row['views'] ?? 0),
+            'uv' => is_array($row['ips'] ?? null) ? count($row['ips']) : 0,
+        ];
+    }
+    usort($referringSites, static function (array $left, array $right): int {
+        $leftViews = (int) ($left['views'] ?? 0);
+        $rightViews = (int) ($right['views'] ?? 0);
+        if ($leftViews !== $rightViews) {
+            return $rightViews <=> $leftViews;
+        }
+
+        $leftUv = (int) ($left['uv'] ?? 0);
+        $rightUv = (int) ($right['uv'] ?? 0);
+        if ($leftUv !== $rightUv) {
+            return $rightUv <=> $leftUv;
+        }
+
+        return strcmp((string) ($left['site'] ?? ''), (string) ($right['site'] ?? ''));
+    });
+    $result['referringSites'] = array_slice($referringSites, 0, $siteLimit);
+
+    $popularRows = [];
+    try {
+        $stmt = $pdo->prepare(
+            "SELECT
+                CASE
+                    WHEN cid IS NOT NULL AND cid > 0 THEN 'cid:' || cid
+                    ELSE 'uri:' || uri
+                END AS content_key,
+                MAX(CASE WHEN cid IS NOT NULL AND cid > 0 THEN cid ELSE 0 END) AS cid,
+                MAX(uri) AS uri,
+                COUNT(*) AS views,
+                COUNT(DISTINCT ip) AS uv
+            FROM v3a_visit_log
+            WHERE created >= :since
+            GROUP BY content_key
+            ORDER BY views DESC, uv DESC, content_key ASC
+            LIMIT :limit"
+        );
+        $stmt->bindValue(':since', (int) $since, \PDO::PARAM_INT);
+        $stmt->bindValue(':limit', (int) $contentLimit, \PDO::PARAM_INT);
+        $stmt->execute();
+        $popularRows = (array) $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    } catch (\Throwable $exception) {
+        $popularRows = [];
+    }
+
+    $cids = [];
+    foreach ($popularRows as $row) {
+        $cid = (int) ($row['cid'] ?? 0);
+        if ($cid > 0) {
+            $cids[] = $cid;
+        }
+    }
+    $cids = array_values(array_unique($cids));
+
+    $contentMap = [];
+    if (!empty($cids)) {
+        try {
+            $db = classic22LinuxDoDb();
+            if (is_object($db)) {
+                $rows = (array) $db->fetchAll(
+                    $db->select('cid', 'title')
+                        ->from('table.contents')
+                        ->where('cid IN ?', $cids)
+                );
+                foreach ($rows as $row) {
+                    if (!is_array($row)) {
+                        continue;
+                    }
+                    $cid = (int) ($row['cid'] ?? 0);
+                    if ($cid > 0) {
+                        $contentMap[$cid] = trim((string) ($row['title'] ?? ''));
+                    }
+                }
+            }
+        } catch (\Throwable $exception) {
+            $contentMap = [];
+        }
+    }
+
+    foreach ($popularRows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+
+        $cid = (int) ($row['cid'] ?? 0);
+        $uri = trim((string) ($row['uri'] ?? ''));
+        $title = $cid > 0 ? trim((string) ($contentMap[$cid] ?? '')) : '';
+        if ($title === '') {
+            if ($uri !== '') {
+                $title = $uri;
+            } elseif ($cid > 0) {
+                $title = '#' . $cid;
+            } else {
+                $title = '—';
+            }
+        }
+
+        $link = $uri;
+        if ($link !== '') {
+            if (!preg_match('#^https?://#i', $link) && strpos($link, '/') !== 0) {
+                $link = '/' . ltrim($link, '/');
+            }
+        } elseif ($cid > 0 && is_object($archive) && function_exists('classic22TimelinePostFallbackLink')) {
+            $link = (string) classic22TimelinePostFallbackLink($archive, $cid);
+        }
+
+        $result['popularContent'][] = [
+            'cid' => $cid > 0 ? $cid : null,
+            'title' => $title,
+            'link' => $link,
+            'views' => (int) ($row['views'] ?? 0),
+            'uv' => (int) ($row['uv'] ?? 0),
+        ];
+    }
+
+    return $result;
+}
+
 function classic22AiBuildSiteContext($archive): array
 {
     $context = [
