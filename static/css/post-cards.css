@@ -657,7 +657,7 @@ body.classic22-post-ai-open {
 .classic22-post-ai-fab {
   position: fixed;
   right: 1.1rem;
-  bottom: 1.15rem;
+  bottom: calc(1.15rem + var(--classic22-cookie-banner-offset, 0px));
   z-index: 120;
   width: 3rem;
   height: 3rem;
@@ -790,7 +790,7 @@ body.classic22-post-ai-open {
 @media (max-width: 768px) {
   .classic22-post-ai-fab {
     right: 1.1rem;
-    bottom: 1.15rem;
+    bottom: calc(1.15rem + var(--classic22-cookie-banner-offset, 0px));
     width: 3rem;
     height: 3rem;
   }

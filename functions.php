@@ -269,6 +269,27 @@ HTML;
     $homeAnnouncements->setInputsAttribute('style', 'display:none');
     $form->addInput($homeAnnouncements);
 
+    $cookieConsentEnabled = new \Typecho\Widget\Helper\Form\Element\Select(
+        'cookieConsentEnabled',
+        [
+            '1' => _t('开启'),
+            '0' => _t('关闭'),
+        ],
+        '1',
+        _t('Cookie 提示条（GDPR）'),
+        _t('新用户首次访问时在页面底部显示 Cookie 提示条；关闭后将不输出提示条与脚本。')
+    );
+    $form->addInput($cookieConsentEnabled);
+
+    $cookiePolicyUrl = new \Typecho\Widget\Helper\Form\Element\Text(
+        'cookiePolicyUrl',
+        null,
+        '',
+        _t('Cookie 政策链接（可选）'),
+        _t('可填写绝对 URL 或站内相对路径；留空则不显示“Cookie 政策”链接。')
+    );
+    $form->addInput($cookiePolicyUrl);
+
     $linuxDoClientId = new \Typecho\Widget\Helper\Form\Element\Text(
         'linuxDoClientId',
         null,

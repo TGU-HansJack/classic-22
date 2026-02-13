@@ -16,6 +16,9 @@ try {
 if ($echartsCdn === '') {
     $echartsCdn = 'https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js';
 }
+$cookieConsentEnabled = classic22LinuxDoGetOption($this->options, 'cookieConsentEnabled', '1') !== '0';
+$cookiePolicyUrl = classic22LinuxDoGetOption($this->options, 'cookiePolicyUrl', '');
+$cookiePolicyUrl = trim((string) $cookiePolicyUrl);
 ?>
 <footer class="site-footer container-fluid">
     <div class="d-flex justify-content-between">
@@ -43,6 +46,29 @@ if ($echartsCdn === '') {
     </div>
 </footer>
 
+<?php if ($cookieConsentEnabled): ?>
+<section class="classic22-cookie-banner" data-cookie-banner hidden aria-label="Cookie 提示">
+    <div class="classic22-cookie-banner-inner">
+        <div class="classic22-cookie-banner-text">
+            <span class="classic22-cookie-banner-title">Cookie</span>
+            <span>本站使用 Cookie 提供基本功能并改善体验。</span>
+            <?php if ($cookiePolicyUrl !== ''): ?>
+                <a class="classic22-cookie-banner-link" href="<?php echo htmlspecialchars($cookiePolicyUrl, ENT_QUOTES, $this->options->charset); ?>" target="_blank" rel="noreferrer noopener">Cookie 政策</a>
+            <?php endif; ?>
+        </div>
+        <div class="classic22-cookie-banner-actions">
+            <button type="button" class="classic22-cookie-btn classic22-cookie-btn--reject" data-cookie-reject><?php _e('拒绝'); ?></button>
+            <button type="button" class="classic22-cookie-btn classic22-cookie-btn--accept" data-cookie-accept><?php _e('接受'); ?></button>
+        </div>
+    </div>
+</section>
+<script type="application/json" data-cookie-consent-bootstrap><?php echo json_encode([
+    'cookieName' => 'classic22_cookie_consent',
+    'storageKey' => 'classic22_cookie_consent',
+    'maxAgeDays' => 180,
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?></script>
+<?php endif; ?>
+
 <?php if ($this->is('post') || $this->is('index')): ?>
 <button type="button" class="classic22-back-to-top" data-back-to-top hidden aria-label="返回顶部" title="返回顶部">
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-to-line-icon lucide-arrow-up-to-line" aria-hidden="true"><path d="M5 3h14"/><path d="m18 13-6-6-6 6"/><path d="M12 7v14"/></svg>
@@ -69,6 +95,9 @@ window.CLASSIC22_LIVE_WS = {
 <script src="<?php $this->options->themeUrl('static/js/content-enhance.js'); ?>" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/live-socket.js'); ?>" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/home-ai-chat.js'); ?>" defer></script>
+<?php if ($cookieConsentEnabled): ?>
+<script src="<?php $this->options->themeUrl('static/js/cookie-consent.js'); ?>" defer></script>
+<?php endif; ?>
 <?php if ($this->is('post') || $this->is('index')): ?>
 <script src="<?php $this->options->themeUrl('static/js/back-to-top.js'); ?>" defer></script>
 <?php endif; ?>
