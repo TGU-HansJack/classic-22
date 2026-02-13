@@ -33,6 +33,42 @@
   cursor: zoom-in;
 }
 
+.classic22-back-to-top {
+  position: fixed;
+  right: 1.1rem;
+  bottom: 1.15rem;
+  z-index: 110;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #ffffff;
+  color: #111827;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+}
+
+.classic22-back-to-top:hover,
+.classic22-back-to-top:focus,
+.classic22-back-to-top:focus-visible {
+  outline: none;
+  border-color: var(--pico-primary);
+  color: var(--pico-primary);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
+}
+
+.classic22-back-to-top:active {
+  transform: translateY(1px);
+}
+
+.classic22-back-to-top.classic22-back-to-top--offset {
+  bottom: 4.6rem;
+}
+
 .feather-calendar::before,
 .feather-user::before,
 .feather-folder::before,

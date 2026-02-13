@@ -43,6 +43,12 @@ if ($echartsCdn === '') {
     </div>
 </footer>
 
+<?php if ($this->is('post') || $this->is('index')): ?>
+<button type="button" class="classic22-back-to-top" data-back-to-top hidden aria-label="返回顶部" title="返回顶部">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-to-line-icon lucide-arrow-up-to-line" aria-hidden="true"><path d="M5 3h14"/><path d="m18 13-6-6-6 6"/><path d="M12 7v14"/></svg>
+</button>
+<?php endif; ?>
+
 <script>
 window.CLASSIC22_LIVE_WS = {
     enabled: <?php echo $liveWsEnabled ? 'true' : 'false'; ?>,
@@ -63,6 +69,9 @@ window.CLASSIC22_LIVE_WS = {
 <script src="<?php $this->options->themeUrl('static/js/content-enhance.js'); ?>" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/live-socket.js'); ?>" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/home-ai-chat.js'); ?>" defer></script>
+<?php if ($this->is('post') || $this->is('index')): ?>
+<script src="<?php $this->options->themeUrl('static/js/back-to-top.js'); ?>" defer></script>
+<?php endif; ?>
 
 <?php $this->footer(); ?>
 
