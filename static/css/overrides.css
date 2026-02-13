@@ -45,7 +45,7 @@ body.classic22-cookie-banner-open {
   bottom: 0;
   z-index: 115;
   padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
-  border-top: 3px solid var(--pico-primary, #0969da);
+  border-top: 1px solid var(--pico-muted-border-color, rgba(0, 0, 0, 0.12));
   background: var(--pico-card-background-color, rgba(255, 255, 255, 0.96));
   background: color-mix(in srgb, var(--pico-card-background-color, #ffffff) 92%, transparent);
   backdrop-filter: blur(12px);
@@ -91,37 +91,46 @@ body.classic22-cookie-banner-open {
   align-items: center;
   gap: 0.5rem;
   flex: 0 0 auto;
-  padding-left: 0.75rem;
-  border-left: 2px solid rgba(9, 105, 218, 0.28);
-  border-left: 2px solid color-mix(in srgb, var(--pico-primary, #0969da) 45%, transparent);
 }
 
 .classic22-cookie-btn {
   appearance: none;
+  -webkit-appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 2.1rem;
-  border: 1px solid var(--pico-muted-border-color, rgba(0, 0, 0, 0.18));
+  min-height: 0;
+  height: auto;
+  margin: 0;
+  box-sizing: border-box;
+  white-space: nowrap;
+  border: 0;
   border-radius: 999px;
-  padding: 0 0.85rem;
-  background: transparent;
+  padding: 0.32rem 0.85rem;
+  background: color-mix(in srgb, var(--pico-color, #111827) 7%, transparent);
   color: var(--pico-color, #111827);
   font-size: 0.85rem;
-  line-height: 1;
+  line-height: 1.1;
   cursor: pointer;
+}
+
+.classic22-cookie-btn::-moz-focus-inner {
+  border: 0;
+  padding: 0;
 }
 
 .classic22-cookie-btn:hover,
 .classic22-cookie-btn:focus,
 .classic22-cookie-btn:focus-visible {
   outline: none;
-  border-color: var(--pico-primary);
-  color: var(--pico-primary);
+  background: color-mix(in srgb, var(--pico-color, #111827) 11%, transparent);
+}
+
+.classic22-cookie-btn:focus-visible {
+  box-shadow: 0 0 0 var(--pico-outline-width, 0.125rem) var(--pico-primary-focus, rgba(9, 105, 218, 0.35));
 }
 
 .classic22-cookie-btn--reject {
-  border-color: rgba(220, 38, 38, 0.55);
   background: rgba(220, 38, 38, 0.08);
   color: #b91c1c;
 }
@@ -130,13 +139,11 @@ body.classic22-cookie-banner-open {
 .classic22-cookie-btn--reject:focus,
 .classic22-cookie-btn--reject:focus-visible {
   outline: none;
-  border-color: #dc2626;
   background: rgba(220, 38, 38, 0.12);
   color: #b91c1c;
 }
 
 .classic22-cookie-btn--accept {
-  border-color: var(--pico-primary);
   background: var(--pico-primary);
   color: #ffffff;
 }
@@ -144,7 +151,6 @@ body.classic22-cookie-banner-open {
 .classic22-cookie-btn--accept:hover,
 .classic22-cookie-btn--accept:focus,
 .classic22-cookie-btn--accept:focus-visible {
-  border-color: var(--pico-primary-hover, var(--pico-primary));
   background: var(--pico-primary-hover, var(--pico-primary));
   color: #ffffff;
 }
@@ -157,8 +163,6 @@ body.classic22-cookie-banner-open {
 
   .classic22-cookie-banner-actions {
     justify-content: flex-end;
-    padding-left: 0;
-    border-left: 0;
   }
 }
 
