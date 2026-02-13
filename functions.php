@@ -1,6 +1,10 @@
 <?php
 if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 
+if (!defined('__TYPECHO_GRAVATAR_PREFIX__')) {
+    define('__TYPECHO_GRAVATAR_PREFIX__', 'https://cdn.sep.cc/avatar/');
+}
+
 function themeConfig($form)
 {
     $logoUrl = new \Typecho\Widget\Helper\Form\Element\Text(
