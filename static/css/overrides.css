@@ -24,6 +24,15 @@
   text-decoration: line-through;
 }
 
+.fmt a.classic22-fancybox-link {
+  display: inline-block;
+  text-decoration: none;
+}
+
+.fmt a.classic22-fancybox-link img {
+  cursor: zoom-in;
+}
+
 .feather-calendar::before,
 .feather-user::before,
 .feather-folder::before,

@@ -18,6 +18,7 @@
 - **首页卡片式文章列表**：自动提取封面图（优先字段：`cover`/`thumb`/`thumbnail`/`image`；兜底提取正文/摘要首图，支持 `data-src/data-original/data-lazy-src`）
 - **文章目录 TOC**：文章页右侧目录，滚动高亮 + 平滑滚动
 - **代码高亮**：集成 `highlight.js`（CDN）
+- **图片点击放大**：文章/页面内容图片自动接入 `Fancybox`（CDN），支持图集浏览；可对图片或其父容器添加 `data-no-fancybox` 禁用
 - **内容增强**：当某段落“只包含 1 个 GitHub 仓库链接（`https://github.com/owner/repo`）且无其它文本”时，会自动渲染为卡片（描述 + Star）
 - **首页公告**：支持多条公告轮播（可视化编辑，默认 3 秒切换）
 

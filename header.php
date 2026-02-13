@@ -18,6 +18,9 @@ if (function_exists('classic22LinuxDoConsumeError')) {
     <link rel="stylesheet" href="<?php $this->options->themeUrl('static/css/post-cards.css'); ?>">
     <link rel="stylesheet" href="<?php $this->options->themeUrl('static/css/overrides.css'); ?>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/styles/github.min.css">
+    <?php if ($this->is('post') || $this->is('page')): ?>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5/dist/fancybox/fancybox.css">
+    <?php endif; ?>
     <?php if ($this->options->colorSchema == 'customize'): ?>
     <link rel="stylesheet" href="<?php $this->options->themeUrl('theme.css'); ?>">
     <?php endif; ?>
