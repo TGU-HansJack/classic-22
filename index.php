@@ -397,7 +397,7 @@ $classic22TrafficBootstrap = [
                         <?php endwhile; ?>
                     </div>
 
-                    <nav><?php $this->pageNav(_t('前一页'), _t('后一页'), 2, '...', array('wrapTag' => 'ul', 'itemTag' => 'li')); ?></nav>
+                    <nav class="classic22-pagination" aria-label="<?php _e('分页'); ?>"><?php $this->pageNav(_t('前一页'), _t('后一页'), 2, '...', array('wrapTag' => 'ul', 'itemTag' => 'li')); ?></nav>
                 </div>
 
             </div>

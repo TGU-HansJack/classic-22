@@ -1002,3 +1002,72 @@ main.container.classic22-post-container {
     padding-right: 3.8rem;
   }
 }
+
+.classic22-pagination {
+  width: 50%;
+  max-width: 95%;
+  margin: 2.5rem auto 0;
+  display: block;
+}
+
+@media (max-width: 1400px) {
+  .classic22-pagination {
+    width: 60%;
+  }
+}
+
+@media (max-width: 1200px) {
+  .classic22-pagination {
+    width: 70%;
+  }
+}
+
+@media (max-width: 992px) {
+  .classic22-pagination {
+    width: 82%;
+  }
+}
+
+@media (max-width: 768px) {
+  .classic22-pagination {
+    width: 95%;
+  }
+}
+
+.classic22-pagination .page-navigator {
+  --classic22-pagination-side-padding: clamp(3.25rem, 14vw, 5.5rem);
+  position: relative;
+  width: 100%;
+  margin: 0;
+  padding: 0 var(--classic22-pagination-side-padding);
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.classic22-pagination .page-navigator > li {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.classic22-pagination .page-navigator > li.prev,
+.classic22-pagination .page-navigator > li.next {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+.classic22-pagination .page-navigator > li.prev {
+  left: calc(-1 * var(--classic22-pagination-side-padding));
+  margin-right: 0;
+}
+
+.classic22-pagination .page-navigator > li.next {
+  right: calc(-1 * var(--classic22-pagination-side-padding));
+  margin-left: 0;
+  text-align: right;
+}
