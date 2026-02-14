@@ -6,16 +6,6 @@ $liveWsEndpoint = trim((string) $liveWsEndpoint);
 if ($liveWsEndpoint === '') {
     $liveWsEndpoint = '/ws';
 }
-$echartsCdn = '';
-try {
-    $pluginOptions = $this->options->plugin('Vue3Admin');
-    $echartsCdn = trim((string) ($pluginOptions->echartsCdn ?? ''));
-} catch (\Throwable $e) {
-    $echartsCdn = '';
-}
-if ($echartsCdn === '') {
-    $echartsCdn = 'https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js';
-}
 $cookieConsentEnabled = classic22LinuxDoGetOption($this->options, 'cookieConsentEnabled', '1') !== '0';
 $cookiePolicyUrl = classic22LinuxDoGetOption($this->options, 'cookiePolicyUrl', '');
 $cookiePolicyUrl = trim((string) $cookiePolicyUrl);
@@ -90,7 +80,7 @@ window.CLASSIC22_LIVE_WS = {
 <?php if ($this->is('post') || $this->is('page')): ?>
 <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5/dist/fancybox/fancybox.umd.min.js" defer></script>
 <?php endif; ?>
-<script src="<?php echo htmlspecialchars($echartsCdn, ENT_QUOTES); ?>" defer></script>
+<script src="<?php $this->options->themeUrl('static/vendor/echarts/echarts.min.js'); ?>" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/home-traffic.js'); ?>" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/content-enhance.js'); ?>" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/live-socket.js'); ?>" defer></script>
