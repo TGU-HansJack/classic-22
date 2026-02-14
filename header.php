@@ -17,14 +17,86 @@ if (function_exists('classic22LinuxDoConsumeError')) {
     <link rel="stylesheet" href="<?php $this->options->themeUrl('static/css/style.css'); ?>">
     <link rel="stylesheet" href="<?php $this->options->themeUrl('static/css/post-cards.css'); ?>">
     <link rel="stylesheet" href="<?php $this->options->themeUrl('static/css/overrides.css'); ?>">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/styles/github.min.css">
+    <link rel="stylesheet" href="<?php $this->options->themeUrl('static/vendor/highlight.js/styles/github.min.css'); ?>">
     <?php if ($this->is('post') || $this->is('page')): ?>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5/dist/fancybox/fancybox.css">
+    <link rel="stylesheet" href="<?php $this->options->themeUrl('static/vendor/fancybox/fancybox.css'); ?>">
     <?php endif; ?>
     <?php if ($this->options->colorSchema == 'customize'): ?>
     <link rel="stylesheet" href="<?php $this->options->themeUrl('theme.css'); ?>">
     <?php endif; ?>
+
+    <?php
+    $classic22FontScale = '1';
+    $classic22FontScaleAllowed = ['1', '0.95', '0.9', '0.85', '0.8', '0.75'];
+    $classic22FontScaleRaw = '1';
+
+    try {
+        if (function_exists('classic22LinuxDoGetOption')) {
+            $classic22FontScaleRaw = classic22LinuxDoGetOption($this->options, 'fontScale', '1');
+        } else {
+            $classic22FontScaleRaw = (string) ($this->options->fontScale ?? '1');
+        }
+    } catch (\Throwable $exception) {
+        $classic22FontScaleRaw = '1';
+    }
+
+    $classic22FontScaleRaw = trim($classic22FontScaleRaw);
+    if (in_array($classic22FontScaleRaw, $classic22FontScaleAllowed, true)) {
+        $classic22FontScale = $classic22FontScaleRaw;
+    }
+
+    $classic22FontScaleNumber = (float) $classic22FontScale;
+
+    $classic22FormatPercent = static function (float $value): string {
+        $formatted = rtrim(rtrim(sprintf('%.4f', $value), '0'), '.');
+        return $formatted . '%';
+    };
+
+    $classic22FormatPx = static function (float $value): string {
+        $formatted = rtrim(rtrim(sprintf('%.2f', $value), '0'), '.');
+        return $formatted . 'px';
+    };
+
+    $classic22PicoFontSizes = [
+        0 => $classic22FormatPercent(100.0 * $classic22FontScaleNumber),
+        576 => $classic22FormatPercent(106.25 * $classic22FontScaleNumber),
+        768 => $classic22FormatPercent(112.5 * $classic22FontScaleNumber),
+        1024 => $classic22FormatPercent(118.75 * $classic22FontScaleNumber),
+        1280 => $classic22FormatPercent(125.0 * $classic22FontScaleNumber),
+        1536 => $classic22FormatPercent(131.25 * $classic22FontScaleNumber),
+    ];
+
+    $classic22PxFontSizes = [
+        'trafficTitle' => $classic22FormatPx(16.0 * $classic22FontScaleNumber),
+        'trafficMeta' => $classic22FormatPx(13.0 * $classic22FontScaleNumber),
+        'trafficSmall' => $classic22FormatPx(12.0 * $classic22FontScaleNumber),
+        'trafficTiny' => $classic22FormatPx(11.0 * $classic22FontScaleNumber),
+        'linkTag' => $classic22FormatPx(12.0 * $classic22FontScaleNumber),
+    ];
+    ?>
     <?php $this->header(); ?>
+
+    <style id="classic22-font-scale">
+        :root { --classic22-font-scale: <?php echo $classic22FontScale; ?>; }
+        <?php if ($classic22FontScale !== '1'): ?>
+        :root { --pico-font-size: <?php echo $classic22PicoFontSizes[0]; ?>; }
+        @media (min-width: 576px) { :root { --pico-font-size: <?php echo $classic22PicoFontSizes[576]; ?>; } }
+        @media (min-width: 768px) { :root { --pico-font-size: <?php echo $classic22PicoFontSizes[768]; ?>; } }
+        @media (min-width: 1024px) { :root { --pico-font-size: <?php echo $classic22PicoFontSizes[1024]; ?>; } }
+        @media (min-width: 1280px) { :root { --pico-font-size: <?php echo $classic22PicoFontSizes[1280]; ?>; } }
+        @media (min-width: 1536px) { :root { --pico-font-size: <?php echo $classic22PicoFontSizes[1536]; ?>; } }
+
+        .classic22-home-traffic-card .classic22-home-sidebar-title { font-size: <?php echo $classic22PxFontSizes['trafficTitle']; ?>; }
+        .classic22-home-traffic-card .classic22-home-sidebar-meta { font-size: <?php echo $classic22PxFontSizes['trafficMeta']; ?>; }
+        .classic22-home-traffic-empty { font-size: <?php echo $classic22PxFontSizes['trafficMeta']; ?>; }
+        .classic22-home-traffic-subtitle { font-size: <?php echo $classic22PxFontSizes['trafficMeta']; ?>; }
+        .classic22-home-traffic-head { font-size: <?php echo $classic22PxFontSizes['trafficTiny']; ?>; }
+        .classic22-home-traffic-title { font-size: <?php echo $classic22PxFontSizes['trafficSmall']; ?>; }
+        .classic22-home-traffic-count { font-size: <?php echo $classic22PxFontSizes['trafficSmall']; ?>; }
+
+        .v3a-link-type { font-size: <?php echo $classic22PxFontSizes['linkTag']; ?>; }
+        <?php endif; ?>
+    </style>
 </head>
 
 <body>

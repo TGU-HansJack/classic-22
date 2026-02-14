@@ -19,6 +19,7 @@
   --pico-primary-hover-underline: #0969da;
   --pico-primary-focus: rgba(9, 105, 218, 0.35);
   --classic22-cookie-banner-offset: 0px;
+  --classic22-font-scale: 1;
 }
 
 .fmt del {

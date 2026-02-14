@@ -32,6 +32,23 @@ function themeConfig($form)
 
     $form->addInput($colorSchema);
 
+    $fontScale = new \Typecho\Widget\Helper\Form\Element\Select(
+        'fontScale',
+        array(
+            '1' => _t('1（默认）'),
+            '0.95' => _t('0.95（95%）'),
+            '0.9' => _t('0.90（90%）'),
+            '0.85' => _t('0.85（85%）'),
+            '0.8' => _t('0.80（80%）'),
+            '0.75' => _t('0.75（75%）'),
+        ),
+        '1',
+        _t('文字大小比例'),
+        _t('按比例缩放主题内全部文字大小（标题/正文/导航/评论等）。当前默认字号对应比例为 1。')
+    );
+
+    $form->addInput($fontScale);
+
     $homeAnnouncementsDescription = <<<'HTML'
 在这里管理首页顶部公告（支持多个公告，上下翻转切换）。<br>
 「内容」必填；「跳转链接」可留空；「Emoji」可选（填写后将优先显示 Emoji）。<div id="classic22-home-announcements-editor" style="margin-top: .5rem;"></div>

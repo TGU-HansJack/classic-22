@@ -17,8 +17,8 @@
 - **深浅色/自定义配色**：后台可选 `自动/浅色/深色/自定义`，自定义时加载 `theme.css`
 - **首页卡片式文章列表**：自动提取封面图（优先字段：`cover`/`thumb`/`thumbnail`/`image`；兜底提取正文/摘要首图，支持 `data-src/data-original/data-lazy-src`）
 - **文章目录 TOC**：文章页右侧目录，滚动高亮 + 平滑滚动
-- **代码高亮**：集成 `highlight.js`（CDN）
-- **图片点击放大**：文章/页面内容图片自动接入 `Fancybox`（CDN），支持图集浏览；可对图片或其父容器添加 `data-no-fancybox` 禁用
+- **代码高亮**：集成 `highlight.js`（本地资源）
+- **图片点击放大**：文章/页面内容图片自动接入 `Fancybox`（本地资源），支持图集浏览；可对图片或其父容器添加 `data-no-fancybox` 禁用
 - **内容增强**：当某段落“只包含 1 个 GitHub 仓库链接（`https://github.com/owner/repo`）且无其它文本”时，会自动渲染为卡片（描述 + Star）
 - **首页公告**：支持多条公告轮播（可视化编辑，默认 3 秒切换）
 
@@ -68,7 +68,7 @@
     - 前端 GitHub 卡片：浏览器访问 `api.github.com`
     - 排行榜：服务器访问 GitHub API（并写入缓存）
   - 投稿页 reCAPTCHA：浏览器需加载 reCAPTCHA 脚本，服务器需验证 token（若启用 Secret Key）
-  - 代码高亮：默认从 CDN 加载 `highlight.js`（无法访问 CDN 时可自行改为本地资源）
+  - 代码高亮：已改为本地资源（不依赖 CDN）
 
 ### 隐私提示（AI）
 

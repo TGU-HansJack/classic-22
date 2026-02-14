@@ -76,9 +76,9 @@ window.CLASSIC22_LIVE_WS = {
 <script src="<?php $this->options->themeUrl('static/js/home-announcements.js'); ?>" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/post-toc.js'); ?>" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/post-lang-switch.js'); ?>" defer></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js" defer></script>
+<script src="<?php $this->options->themeUrl('static/vendor/highlight.js/highlight.min.js'); ?>" defer></script>
 <?php if ($this->is('post') || $this->is('page')): ?>
-<script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5/dist/fancybox/fancybox.umd.min.js" defer></script>
+<script src="<?php $this->options->themeUrl('static/vendor/fancybox/fancybox.umd.min.js'); ?>" defer></script>
 <?php endif; ?>
 <script src="<?php $this->options->themeUrl('static/vendor/echarts/echarts.min.js'); ?>" defer></script>
 <script src="<?php $this->options->themeUrl('static/js/home-traffic.js'); ?>" defer></script>
