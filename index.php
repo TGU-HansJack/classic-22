@@ -152,6 +152,23 @@ $classic22TrafficBootstrap = [
             </section>
         <?php endif; ?>
 
+        <section class="classic22-home-subscribe-row" aria-label="邮件订阅">
+            <form
+                class="classic22-home-subscribe-form mailflow-form is-compact"
+                action="<?php echo Typecho_Common::url('/action/mailflow', $this->options->index); ?>"
+                method="post"
+            >
+                <input type="hidden" name="do" value="subscribe">
+                <input type="hidden" name="scope" value="site">
+                <input type="hidden" name="source" value="home">
+                <input type="text" name="website" class="classic22-home-subscribe-hp" autocomplete="off" tabindex="-1" value="">
+                <span class="classic22-home-subscribe-label"><?php _e('订阅本站'); ?></span>
+                <input type="email" name="email" required placeholder="<?php _e('输入邮箱'); ?>" aria-label="<?php _e('邮箱地址'); ?>" autocomplete="email">
+                <button type="submit"><?php _e('订阅'); ?></button>
+                <span class="classic22-home-subscribe-msg mailflow-msg" data-mailflow-msg hidden></span>
+            </form>
+        </section>
+
         <aside class="classic22-home-sidebar classic22-home-sidebar--left" aria-label="首页左侧栏">
             <section class="classic22-home-sidebar-card classic22-home-traffic-card" aria-label="浏览 Traffic">
                 <h3 class="classic22-home-sidebar-title">Total views in last <?php echo $classic22TrafficBootstrap['windowDays']; ?> days</h3>

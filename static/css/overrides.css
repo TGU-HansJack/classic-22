@@ -677,6 +677,140 @@ body.classic22-cookie-banner-open {
   pointer-events: none;
 }
 
+/* Home MailFlow subscribe row (single line) */
+.classic22-home-subscribe-row {
+  --classic22-home-subscribe-height: 2.125rem;
+  width: 50%;
+  max-width: 95%;
+  margin: 0 auto 2.1rem;
+  overflow: visible;
+  padding: 0.12rem 0;
+}
+
+.classic22-home-subscribe-form {
+  position: relative;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  width: auto !important;
+  max-width: none !important;
+  min-height: var(--classic22-home-subscribe-height);
+}
+
+.classic22-home-subscribe-form > * {
+  margin: 0;
+  align-self: center;
+  vertical-align: middle;
+}
+
+.classic22-home-subscribe-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--classic22-home-subscribe-height);
+  min-height: var(--classic22-home-subscribe-height);
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--pico-muted-color);
+  margin-bottom: 0 !important;
+}
+
+.classic22-home-subscribe-form input[type="email"] {
+  flex: 0 0 auto !important;
+  width: clamp(9rem, 18vw, 13rem) !important;
+  max-width: clamp(9rem, 18vw, 13rem) !important;
+  height: var(--classic22-home-subscribe-height) !important;
+  min-height: var(--classic22-home-subscribe-height) !important;
+  margin-bottom: 0 !important;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.2;
+  box-sizing: border-box;
+}
+
+.classic22-home-subscribe-form button[type="submit"] {
+  flex: 0 0 auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center;
+  width: auto !important;
+  min-width: 3.75rem;
+  max-width: none;
+  height: var(--classic22-home-subscribe-height);
+  min-height: var(--classic22-home-subscribe-height);
+  margin-bottom: 0 !important;
+  padding: 0 0.82rem;
+  font-size: 0.875rem;
+  line-height: 1;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.classic22-home-subscribe-hp {
+  position: absolute !important;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.classic22-home-subscribe-msg {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  border-radius: 0.35rem;
+  background: var(--pico-background-color);
+  border: 1px solid var(--pico-muted-border-color);
+  z-index: 6;
+}
+
+.classic22-home-subscribe-msg[hidden] {
+  display: none !important;
+}
+
+@media (max-width: 1400px) {
+  .classic22-home-subscribe-row {
+    width: 60%;
+  }
+}
+
+@media (max-width: 1200px) {
+  .classic22-home-subscribe-row {
+    width: 70%;
+  }
+}
+
+@media (max-width: 992px) {
+  .classic22-home-subscribe-row {
+    width: 82%;
+  }
+}
+
+@media (max-width: 768px) {
+  .classic22-home-subscribe-row {
+    width: 95%;
+  }
+
+  .classic22-home-subscribe-form {
+    gap: 0.35rem;
+  }
+
+  .classic22-home-subscribe-form input[type="email"] {
+    width: clamp(7.2rem, 48vw, 11rem) !important;
+    max-width: clamp(7.2rem, 48vw, 11rem) !important;
+  }
+}
+
 @supports (background: color-mix(in srgb, black 5%, white)) {
   .site-navbar .classic22-announcement-link {
     background: color-mix(
